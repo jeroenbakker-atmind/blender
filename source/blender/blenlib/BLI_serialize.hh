@@ -35,6 +35,7 @@ enum class ValueType {
   String,
   Int,
   Array,
+  Null,
 };
 
 class Value {
@@ -59,6 +60,10 @@ class Value {
   {
   }
 
+  Value() : _type(ValueType::Null)
+  {
+  }
+
   ~Value()
   {
     switch (_type) {
@@ -71,6 +76,7 @@ class Value {
       }
       case ValueType::String:
       case ValueType::Int:
+      case ValueType::Null:
         /* Nothing to delete for simple types. */
         break;
     }

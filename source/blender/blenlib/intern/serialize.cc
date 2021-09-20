@@ -24,6 +24,10 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
       }
       break;
     }
+    case ValueType::Null: {
+      j = nullptr;
+      break;
+    }
   }
 }
 
