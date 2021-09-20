@@ -123,6 +123,7 @@ class Value {
           Value *value = _array_items.pop_last();
           delete value;
         }
+        _array_items.clear_and_make_inline();
         break;
       }
       case ValueType::String:

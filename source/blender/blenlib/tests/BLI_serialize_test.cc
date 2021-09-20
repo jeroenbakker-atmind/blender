@@ -61,10 +61,13 @@ TEST(serialize, array_to_json)
   Vector<Value *> array;
   array.append_as(new Value(ValueType::Int, 42));
   array.append_as(new Value(ValueType::String, std::string("Hello JSON")));
+  array.append_as(new Value(ValueType::Null));
+  array.append_as(new Value(ValueType::Boolean, false));
+  array.append_as(new Value(ValueType::Boolean, true));
   Value value_array(ValueType::Array, array);
 
   json.serialize(out, value_array);
-  EXPECT_EQ(out.str(), "[42,\"Hello JSON\"]");
+  EXPECT_EQ(out.str(), "[42,\"Hello JSON\",null,false,true]");
 }
 
 }  // namespace blender::io::serialize::json::testing
