@@ -11,10 +11,12 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
       j = value.string_value();
       break;
     }
+
     case ValueType::Int: {
       j = value.int_value();
       break;
     }
+
     case ValueType::Array: {
       const Vector<Value *> &items = value.array_items();
       for (const Value *item_value : items) {
@@ -24,8 +26,14 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
       }
       break;
     }
+
     case ValueType::Null: {
       j = nullptr;
+      break;
+    }
+
+    case ValueType::Boolean: {
+      j = value.boolean_value();
       break;
     }
   }
