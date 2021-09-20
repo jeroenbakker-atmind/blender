@@ -15,6 +15,15 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
       j = value.int_value();
       break;
     }
+    case ValueType::Array: {
+      const Vector<Value *> &items = value.array_items();
+      for (const Value *item_value : items) {
+        nlohmann::json json_item;
+        convert_to_json(json_item, *item_value);
+        j.push_back(json_item);
+      }
+      break;
+    }
   }
 }
 
@@ -22,7 +31,12 @@ void JsonFormatter::serialize(std::ostream &os, Value &value)
 {
   nlohmann::json j;
   convert_to_json(j, value);
-  os << j.dump(2);
+  if (indentation_len) {
+    os << j.dump(indentation_len);
+  }
+  else {
+    os << j.dump();
+  }
 }
 
 }  // namespace blender::io::serialize

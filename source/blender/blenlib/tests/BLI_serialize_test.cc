@@ -27,4 +27,17 @@ TEST(serialize, int_to_json)
   EXPECT_EQ(out.str(), "42");
 }
 
+TEST(serialize, array_to_json)
+{
+  JsonFormatter json;
+  std::stringstream out;
+  Vector<Value *> array;
+  array.append_as(new Value(42));
+  array.append_as(new Value(std::string("Hello JSON")));
+  Value value_array(array);
+
+  json.serialize(out, value_array);
+  EXPECT_EQ(out.str(), "[42,\"Hello JSON\"]");
+}
+
 }  // namespace blender::io::serialize::json::testing
