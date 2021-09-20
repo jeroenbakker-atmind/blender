@@ -38,8 +38,12 @@ enum class ValueType {
   Null,
   Boolean,
   Float,
+  Object,
 };
 
+// TODO: Should we use inheritance or the current flat structure. The current implementation was
+// done to keep the structure as flat as possible. Adding inheritance might lead to more
+// allocations. but keeps the code readability more clear...
 class Value {
  private:
   ValueType _type;
@@ -50,6 +54,7 @@ class Value {
     bool _boolean;
   };
   Vector<Value *> _array_items;
+  Map<std::string, Value *> _attributes;
 
  public:
   Value(ValueType type, ...) : _type(type)
@@ -92,7 +97,10 @@ class Value {
       }
 
       case ValueType::Array: {
-        _array_items = Vector<Value *>();
+        break;
+      }
+
+      case ValueType::Object: {
         break;
       }
     }
@@ -100,23 +108,15 @@ class Value {
 
   ~Value()
   {
-    switch (_type) {
-      case ValueType::Array: {
-        while (!_array_items.is_empty()) {
-          Value *value = _array_items.pop_last();
-          delete value;
-        }
-        _array_items.clear_and_make_inline();
-        break;
-      }
-      case ValueType::String:
-      case ValueType::Int:
-      case ValueType::Null:
-      case ValueType::Boolean:
-      case ValueType::Float:
-        /* Nothing to delete for simple types. */
-        break;
+    while (!_array_items.is_empty()) {
+      Value *value = _array_items.pop_last();
+      delete value;
     }
+    for (Map<std::string, Value *>::Item item : _attributes.items()) {
+      delete item.value;
+      // item.value = nullptr;
+    }
+    _attributes.clear();
   }
 
   const ValueType type() const
@@ -157,6 +157,18 @@ class Value {
   {
     BLI_assert(_type == ValueType::Array);
     return _array_items;
+  }
+
+  const Map<std::string, Value *> &attributes() const
+  {
+    BLI_assert(_type == ValueType::Object);
+    return _attributes;
+  }
+
+  Map<std::string, Value *> &attributes()
+  {
+    BLI_assert(_type == ValueType::Object);
+    return _attributes;
   }
 };
 

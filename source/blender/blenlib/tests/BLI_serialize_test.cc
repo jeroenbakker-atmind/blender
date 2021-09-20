@@ -70,4 +70,16 @@ TEST(serialize, array_to_json)
   EXPECT_EQ(out.str(), "[42,\"Hello JSON\",null,false,true]");
 }
 
+TEST(serialize, object_to_json)
+{
+  JsonFormatter json;
+  std::stringstream out;
+  Value value_object(ValueType::Object);
+  Map<std::string, Value *> &attributes = value_object.attributes();
+  attributes.add_as(std::string("best_number"), new Value(ValueType::Int, 42));
+
+  json.serialize(out, value_object);
+  EXPECT_EQ(out.str(), "{\"best_number\":42}");
+}
+
 }  // namespace blender::io::serialize::json::testing

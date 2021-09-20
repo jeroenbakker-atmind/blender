@@ -27,6 +27,16 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
       break;
     }
 
+    case ValueType::Object: {
+      const Map<std::string, Value *> &attributes = value.attributes();
+      for (const Map<std::string, Value *>::Item &attribute : attributes.items()) {
+        nlohmann::json json_item;
+        convert_to_json(json_item, *attribute.value);
+        j[attribute.key] = json_item;
+      }
+      break;
+    }
+
     case ValueType::Null: {
       j = nullptr;
       break;
