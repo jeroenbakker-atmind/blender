@@ -62,11 +62,13 @@ class Value {
  private:
   eValueType _type;
 
- public:
+ protected:
+  Value() = delete;
   Value(eValueType type) : _type(type)
   {
   }
 
+ public:
   const eValueType type() const
   {
     return _type;
