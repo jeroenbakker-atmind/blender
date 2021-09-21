@@ -49,7 +49,7 @@ TEST(serialize, false_to_json)
 {
   JsonFormatter json;
   std::stringstream out;
-  Value value(ValueType::Boolean, false);
+  BooleanValue value(false);
   json.serialize(out, value);
   EXPECT_EQ(out.str(), "false");
 }
@@ -58,7 +58,7 @@ TEST(serialize, true_to_json)
 {
   JsonFormatter json;
   std::stringstream out;
-  Value value(ValueType::Boolean, true);
+  BooleanValue value(true);
   json.serialize(out, value);
   EXPECT_EQ(out.str(), "true");
 }
@@ -72,8 +72,8 @@ TEST(serialize, array_to_json)
   array.append_as(new IntValue(42));
   array.append_as(new StringValue("Hello JSON"));
   array.append_as(new Value(ValueType::Null));
-  array.append_as(new Value(ValueType::Boolean, false));
-  array.append_as(new Value(ValueType::Boolean, true));
+  array.append_as(new BooleanValue(false));
+  array.append_as(new BooleanValue(true));
 
   json.serialize(out, value_array);
   EXPECT_EQ(out.str(), "[42,\"Hello JSON\",null,false,true]");

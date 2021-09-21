@@ -52,37 +52,17 @@ class StringValue;
 template<typename T, ValueType V> class PrimitiveValue;
 using IntValue = PrimitiveValue<uint64_t, ValueType::Int>;
 using FloatValue = PrimitiveValue<double, ValueType::Float>;
+using BooleanValue = PrimitiveValue<bool, ValueType::Boolean>;
 
 class Value {
  private:
   ValueType _type;
-  union {
-    bool _boolean;
-  };
   Vector<Value *> _array_items;
   Map<std::string, Value *> _attributes;
 
  public:
-  Value(ValueType type, ...) : _type(type)
+  Value(ValueType type) : _type(type)
   {
-    switch (_type) {
-      case ValueType::String:
-      case ValueType::Int:
-      case ValueType::Null:
-      case ValueType::Array:
-      case ValueType::Object:
-      case ValueType::Float:
-        break;
-
-      case ValueType::Boolean: {
-        va_list va;
-        va_start(va, type);
-        /* Compiler promotes bools to ints. */
-        _boolean = va_arg(va, int);
-        va_end(va);
-        break;
-      }
-    }
   }
 
   ~Value()
@@ -101,12 +81,6 @@ class Value {
   const ValueType type() const
   {
     return _type;
-  }
-
-  const bool boolean_value() const
-  {
-    BLI_assert(_type == ValueType::Boolean);
-    return _boolean;
   }
 
   const Vector<Value *> &array_items() const
@@ -135,6 +109,7 @@ class Value {
   const StringValue *as_string_value() const;
   const IntValue *as_int_value() const;
   const FloatValue *as_float_value() const;
+  const BooleanValue *as_boolean_value() const;
 };
 
 template<typename T, ValueType V> class PrimitiveValue : public Value {
