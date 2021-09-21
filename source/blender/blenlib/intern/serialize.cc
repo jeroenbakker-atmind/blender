@@ -4,11 +4,19 @@
 
 namespace blender::io::serialize {
 
+const StringValue *Value::as_string_value() const
+{
+  if (_type != ValueType::String) {
+    return nullptr;
+  }
+  return static_cast<const StringValue *>(this);
+}
+
 static void convert_to_json(nlohmann::json &j, const Value &value)
 {
   switch (value.type()) {
     case ValueType::String: {
-      j = value.string_value();
+      j = value.as_string_value()->string_value();
       break;
     }
 

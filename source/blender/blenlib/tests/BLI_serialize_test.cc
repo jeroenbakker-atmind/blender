@@ -13,7 +13,7 @@ TEST(serialize, string_to_json)
 {
   JsonFormatter json;
   std::stringstream out;
-  Value test_value(ValueType::String, std::string("Hello JSON"));
+  StringValue test_value("Hello JSON");
   json.serialize(out, test_value);
   EXPECT_EQ(out.str(), "\"Hello JSON\"");
 }
@@ -61,7 +61,7 @@ TEST(serialize, array_to_json)
   Value value_array(ValueType::Array);
   Vector<Value *> &array = value_array.array_items();
   array.append_as(new Value(ValueType::Int, 42));
-  array.append_as(new Value(ValueType::String, std::string("Hello JSON")));
+  array.append_as(new StringValue("Hello JSON"));
   array.append_as(new Value(ValueType::Null));
   array.append_as(new Value(ValueType::Boolean, false));
   array.append_as(new Value(ValueType::Boolean, true));

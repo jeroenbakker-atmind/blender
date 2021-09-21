@@ -27,6 +27,7 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
+#include <optional>
 #include <ostream>
 
 namespace blender::io::serialize {
@@ -44,11 +45,12 @@ enum class ValueType {
 // TODO: Should we use inheritance or the current flat structure. The current implementation was
 // done to keep the structure as flat as possible. Adding inheritance might lead to more
 // allocations. but keeps the code readability more clear...
+class StringValue;
+
 class Value {
  private:
   ValueType _type;
   union {
-    std::string _string_value = "";
     int64_t _int_value;
     double _double;
     bool _boolean;
@@ -61,10 +63,6 @@ class Value {
   {
     switch (_type) {
       case ValueType::String: {
-        va_list va;
-        va_start(va, type);
-        _string_value = va_arg(va, std::string);
-        va_end(va);
         break;
       }
 
@@ -124,12 +122,6 @@ class Value {
     return _type;
   }
 
-  const std::string &string_value() const
-  {
-    BLI_assert(_type == ValueType::String);
-    return _string_value;
-  }
-
   const int64_t int_value() const
   {
     BLI_assert(_type == ValueType::Int);
@@ -169,6 +161,23 @@ class Value {
   {
     BLI_assert(_type == ValueType::Object);
     return _attributes;
+  }
+
+  const StringValue *as_string_value() const;
+};
+
+class StringValue : public Value {
+ private:
+  std::string _string = "";
+
+ public:
+  StringValue(const StringRef string) : Value(ValueType::String), _string(string)
+  {
+  }
+
+  const std::string &string_value() const
+  {
+    return _string;
   }
 };
 
