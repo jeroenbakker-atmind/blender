@@ -49,29 +49,25 @@ enum class ValueType {
 // allocations. but keeps the code readability more clear...
 class Value;
 class StringValue;
-class ArrayValue;
 template<typename T, ValueType V> class PrimitiveValue;
 using IntValue = PrimitiveValue<uint64_t, ValueType::Int>;
 using FloatValue = PrimitiveValue<double, ValueType::Float>;
 using BooleanValue = PrimitiveValue<bool, ValueType::Boolean>;
 
+template<typename Container, typename ContainerItem, ValueType V> class ContainerValue;
+using ArrayValue =
+    ContainerValue<Vector<std::shared_ptr<Value>>, std::shared_ptr<Value>, ValueType::Array>;
+using ObjectValue = ContainerValue<Map<std::string, std::shared_ptr<Value>>,
+                                   std::shared_ptr<Value>,
+                                   ValueType::Object>;
+
 class Value {
  private:
   ValueType _type;
-  Map<std::string, Value *> _attributes;
 
  public:
   Value(ValueType type) : _type(type)
   {
-  }
-
-  ~Value()
-  {
-    for (Map<std::string, Value *>::Item item : _attributes.items()) {
-      delete item.value;
-      // item.value = nullptr;
-    }
-    _attributes.clear();
   }
 
   const ValueType type() const
@@ -79,23 +75,12 @@ class Value {
     return _type;
   }
 
-  const Map<std::string, Value *> &attributes() const
-  {
-    BLI_assert(_type == ValueType::Object);
-    return _attributes;
-  }
-
-  Map<std::string, Value *> &attributes()
-  {
-    BLI_assert(_type == ValueType::Object);
-    return _attributes;
-  }
-
   const StringValue *as_string_value() const;
   const IntValue *as_int_value() const;
   const FloatValue *as_float_value() const;
   const BooleanValue *as_boolean_value() const;
   const ArrayValue *as_array_value() const;
+  const ObjectValue *as_object_value() const;
 };
 
 template<typename T, ValueType V> class PrimitiveValue : public Value {
@@ -135,27 +120,28 @@ class StringValue : public Value {
   }
 };
 
-class ArrayValue : public Value {
+template<typename Container, typename ContainerItem, ValueType V>
+class ContainerValue : public Value {
  public:
-  using Item = std::shared_ptr<Value>;
-  using Items = Vector<Item>;
+  using Items = Container;
+  using Item = ContainerItem;
 
  private:
-  Items _elements;
+  Container _inner_value;
 
  public:
-  ArrayValue() : Value(ValueType::Array)
+  ContainerValue() : Value(V)
   {
   }
 
-  const Items &elements() const
+  const Container &elements() const
   {
-    return _elements;
+    return _inner_value;
   }
 
-  Items &elements()
+  Container &elements()
   {
-    return _elements;
+    return _inner_value;
   }
 };
 

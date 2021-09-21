@@ -43,6 +43,15 @@ const ArrayValue *Value::as_array_value() const
   }
   return static_cast<const ArrayValue *>(this);
 }
+
+const ObjectValue *Value::as_object_value() const
+{
+  if (_type != ValueType::Object) {
+    return nullptr;
+  }
+  return static_cast<const ObjectValue *>(this);
+}
+
 static void convert_to_json(nlohmann::json &j, const Value &value)
 {
   switch (value.type()) {
@@ -67,8 +76,8 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
     }
 
     case ValueType::Object: {
-      const Map<std::string, Value *> &attributes = value.attributes();
-      for (const Map<std::string, Value *>::Item &attribute : attributes.items()) {
+      const ObjectValue::Items &attributes = value.as_object_value()->elements();
+      for (const ObjectValue::Items::Item &attribute : attributes.items()) {
         nlohmann::json json_item;
         convert_to_json(json_item, *attribute.value);
         j[attribute.key] = json_item;
