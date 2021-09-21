@@ -67,8 +67,8 @@ TEST(serialize, array_to_json)
 {
   JsonFormatter json;
   std::stringstream out;
-  Value value_array(ValueType::Array);
-  Vector<Value *> &array = value_array.array_items();
+  ArrayValue value_array;
+  ArrayValue::Items &array = value_array.elements();
   array.append_as(new IntValue(42));
   array.append_as(new StringValue("Hello JSON"));
   array.append_as(new NullValue);

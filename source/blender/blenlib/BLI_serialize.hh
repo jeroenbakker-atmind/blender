@@ -49,6 +49,7 @@ enum class ValueType {
 // allocations. but keeps the code readability more clear...
 class Value;
 class StringValue;
+class ArrayValue;
 template<typename T, ValueType V> class PrimitiveValue;
 using IntValue = PrimitiveValue<uint64_t, ValueType::Int>;
 using FloatValue = PrimitiveValue<double, ValueType::Float>;
@@ -57,7 +58,6 @@ using BooleanValue = PrimitiveValue<bool, ValueType::Boolean>;
 class Value {
  private:
   ValueType _type;
-  Vector<Value *> _array_items;
   Map<std::string, Value *> _attributes;
 
  public:
@@ -67,10 +67,6 @@ class Value {
 
   ~Value()
   {
-    while (!_array_items.is_empty()) {
-      Value *value = _array_items.pop_last();
-      delete value;
-    }
     for (Map<std::string, Value *>::Item item : _attributes.items()) {
       delete item.value;
       // item.value = nullptr;
@@ -81,17 +77,6 @@ class Value {
   const ValueType type() const
   {
     return _type;
-  }
-
-  const Vector<Value *> &array_items() const
-  {
-    BLI_assert(_type == ValueType::Array);
-    return _array_items;
-  }
-  Vector<Value *> &array_items()
-  {
-    BLI_assert(_type == ValueType::Array);
-    return _array_items;
   }
 
   const Map<std::string, Value *> &attributes() const
@@ -110,6 +95,7 @@ class Value {
   const IntValue *as_int_value() const;
   const FloatValue *as_float_value() const;
   const BooleanValue *as_boolean_value() const;
+  const ArrayValue *as_array_value() const;
 };
 
 template<typename T, ValueType V> class PrimitiveValue : public Value {
@@ -146,6 +132,30 @@ class StringValue : public Value {
   const std::string &string_value() const
   {
     return _string;
+  }
+};
+
+class ArrayValue : public Value {
+ public:
+  using Item = std::shared_ptr<Value>;
+  using Items = Vector<Item>;
+
+ private:
+  Items _elements;
+
+ public:
+  ArrayValue() : Value(ValueType::Array)
+  {
+  }
+
+  const Items &elements() const
+  {
+    return _elements;
+  }
+
+  Items &elements()
+  {
+    return _elements;
   }
 };
 

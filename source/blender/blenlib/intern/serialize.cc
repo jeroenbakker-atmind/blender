@@ -36,6 +36,13 @@ const BooleanValue *Value::as_boolean_value() const
   return static_cast<const BooleanValue *>(this);
 }
 
+const ArrayValue *Value::as_array_value() const
+{
+  if (_type != ValueType::Array) {
+    return nullptr;
+  }
+  return static_cast<const ArrayValue *>(this);
+}
 static void convert_to_json(nlohmann::json &j, const Value &value)
 {
   switch (value.type()) {
@@ -50,8 +57,8 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
     }
 
     case ValueType::Array: {
-      const Vector<Value *> &items = value.array_items();
-      for (const Value *item_value : items) {
+      const ArrayValue::Items &items = value.as_array_value()->elements();
+      for (const ArrayValue::Item &item_value : items) {
         nlohmann::json json_item;
         convert_to_json(json_item, *item_value);
         j.push_back(json_item);
