@@ -19,6 +19,14 @@ const IntValue *Value::as_int_value() const
   return static_cast<const IntValue *>(this);
 }
 
+const FloatValue *Value::as_float_value() const
+{
+  if (_type != ValueType::Float) {
+    return nullptr;
+  }
+  return static_cast<const FloatValue *>(this);
+}
+
 static void convert_to_json(nlohmann::json &j, const Value &value)
 {
   switch (value.type()) {
@@ -63,7 +71,7 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
     }
 
     case ValueType::Float: {
-      j = value.float_value();
+      j = value.as_float_value()->value();
     }
   }
 }

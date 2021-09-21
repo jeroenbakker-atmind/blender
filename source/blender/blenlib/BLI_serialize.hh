@@ -30,6 +30,8 @@
 #include <optional>
 #include <ostream>
 
+#pragma once
+
 namespace blender::io::serialize {
 
 enum class ValueType {
@@ -45,14 +47,16 @@ enum class ValueType {
 // TODO: Should we use inheritance or the current flat structure. The current implementation was
 // done to keep the structure as flat as possible. Adding inheritance might lead to more
 // allocations. but keeps the code readability more clear...
+class Value;
 class StringValue;
-class IntValue;
+template<typename T, ValueType V> class PrimitiveValue;
+using IntValue = PrimitiveValue<uint64_t, ValueType::Int>;
+using FloatValue = PrimitiveValue<double, ValueType::Float>;
 
 class Value {
  private:
   ValueType _type;
   union {
-    double _double;
     bool _boolean;
   };
   Vector<Value *> _array_items;
@@ -67,15 +71,8 @@ class Value {
       case ValueType::Null:
       case ValueType::Array:
       case ValueType::Object:
+      case ValueType::Float:
         break;
-
-      case ValueType::Float: {
-        va_list va;
-        va_start(va, type);
-        _double = va_arg(va, double);
-        va_end(va);
-        break;
-      }
 
       case ValueType::Boolean: {
         va_list va;
@@ -112,12 +109,6 @@ class Value {
     return _boolean;
   }
 
-  const double float_value() const
-  {
-    BLI_assert(_type == ValueType::Float);
-    return _double;
-  }
-
   const Vector<Value *> &array_items() const
   {
     BLI_assert(_type == ValueType::Array);
@@ -143,6 +134,22 @@ class Value {
 
   const StringValue *as_string_value() const;
   const IntValue *as_int_value() const;
+  const FloatValue *as_float_value() const;
+};
+
+template<typename T, ValueType V> class PrimitiveValue : public Value {
+ private:
+  T _inner_value;
+
+ public:
+  PrimitiveValue(const T value) : Value(V), _inner_value(value)
+  {
+  }
+
+  const T value() const
+  {
+    return _inner_value;
+  }
 };
 
 class StringValue : public Value {
@@ -157,21 +164,6 @@ class StringValue : public Value {
   const std::string &string_value() const
   {
     return _string;
-  }
-};
-
-class IntValue : public Value {
- private:
-  uint64_t _inner_value;
-
- public:
-  IntValue(const uint64_t value) : Value(ValueType::Int), _inner_value(value)
-  {
-  }
-
-  const uint64_t value() const
-  {
-    return _inner_value;
   }
 };
 

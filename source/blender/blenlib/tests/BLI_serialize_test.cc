@@ -27,6 +27,15 @@ TEST(serialize, int_to_json)
   EXPECT_EQ(out.str(), "42");
 }
 
+TEST(serialize, float_to_json)
+{
+  JsonFormatter json;
+  std::stringstream out;
+  FloatValue test_value(42.31);
+  json.serialize(out, test_value);
+  EXPECT_EQ(out.str(), "42.31");
+}
+
 TEST(serialize, null_to_json)
 {
   JsonFormatter json;
