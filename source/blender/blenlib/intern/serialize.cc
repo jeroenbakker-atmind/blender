@@ -11,6 +11,13 @@ const StringValue *Value::as_string_value() const
   }
   return static_cast<const StringValue *>(this);
 }
+const IntValue *Value::as_int_value() const
+{
+  if (_type != ValueType::Int) {
+    return nullptr;
+  }
+  return static_cast<const IntValue *>(this);
+}
 
 static void convert_to_json(nlohmann::json &j, const Value &value)
 {
@@ -21,7 +28,7 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
     }
 
     case ValueType::Int: {
-      j = value.int_value();
+      j = value.as_int_value()->value();
       break;
     }
 

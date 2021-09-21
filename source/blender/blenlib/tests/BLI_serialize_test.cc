@@ -22,7 +22,7 @@ TEST(serialize, int_to_json)
 {
   JsonFormatter json;
   std::stringstream out;
-  Value test_value(ValueType::Int, 42);
+  IntValue test_value(42);
   json.serialize(out, test_value);
   EXPECT_EQ(out.str(), "42");
 }
@@ -60,7 +60,7 @@ TEST(serialize, array_to_json)
   std::stringstream out;
   Value value_array(ValueType::Array);
   Vector<Value *> &array = value_array.array_items();
-  array.append_as(new Value(ValueType::Int, 42));
+  array.append_as(new IntValue(42));
   array.append_as(new StringValue("Hello JSON"));
   array.append_as(new Value(ValueType::Null));
   array.append_as(new Value(ValueType::Boolean, false));
@@ -76,7 +76,7 @@ TEST(serialize, object_to_json)
   std::stringstream out;
   Value value_object(ValueType::Object);
   Map<std::string, Value *> &attributes = value_object.attributes();
-  attributes.add_as(std::string("best_number"), new Value(ValueType::Int, 42));
+  attributes.add_as(std::string("best_number"), new IntValue(42));
 
   json.serialize(out, value_object);
   EXPECT_EQ(out.str(), "{\"best_number\":42}");

@@ -46,12 +46,12 @@ enum class ValueType {
 // done to keep the structure as flat as possible. Adding inheritance might lead to more
 // allocations. but keeps the code readability more clear...
 class StringValue;
+class IntValue;
 
 class Value {
  private:
   ValueType _type;
   union {
-    int64_t _int_value;
     double _double;
     bool _boolean;
   };
@@ -62,17 +62,12 @@ class Value {
   Value(ValueType type, ...) : _type(type)
   {
     switch (_type) {
-      case ValueType::String: {
+      case ValueType::String:
+      case ValueType::Int:
+      case ValueType::Null:
+      case ValueType::Array:
+      case ValueType::Object:
         break;
-      }
-
-      case ValueType::Int: {
-        va_list va;
-        va_start(va, type);
-        _int_value = va_arg(va, uint64_t);
-        va_end(va);
-        break;
-      }
 
       case ValueType::Float: {
         va_list va;
@@ -88,17 +83,6 @@ class Value {
         /* Compiler promotes bools to ints. */
         _boolean = va_arg(va, int);
         va_end(va);
-        break;
-      }
-      case ValueType::Null: {
-        break;
-      }
-
-      case ValueType::Array: {
-        break;
-      }
-
-      case ValueType::Object: {
         break;
       }
     }
@@ -120,12 +104,6 @@ class Value {
   const ValueType type() const
   {
     return _type;
-  }
-
-  const int64_t int_value() const
-  {
-    BLI_assert(_type == ValueType::Int);
-    return _int_value;
   }
 
   const bool boolean_value() const
@@ -164,11 +142,12 @@ class Value {
   }
 
   const StringValue *as_string_value() const;
+  const IntValue *as_int_value() const;
 };
 
 class StringValue : public Value {
  private:
-  std::string _string = "";
+  std::string _string;
 
  public:
   StringValue(const StringRef string) : Value(ValueType::String), _string(string)
@@ -178,6 +157,21 @@ class StringValue : public Value {
   const std::string &string_value() const
   {
     return _string;
+  }
+};
+
+class IntValue : public Value {
+ private:
+  uint64_t _inner_value;
+
+ public:
+  IntValue(const uint64_t value) : Value(ValueType::Int), _inner_value(value)
+  {
+  }
+
+  const uint64_t value() const
+  {
+    return _inner_value;
   }
 };
 
