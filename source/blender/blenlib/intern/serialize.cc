@@ -6,7 +6,7 @@ namespace blender::io::serialize {
 
 const StringValue *Value::as_string_value() const
 {
-  if (_type != ValueType::String) {
+  if (_type != eValueType::String) {
     return nullptr;
   }
   return static_cast<const StringValue *>(this);
@@ -14,7 +14,7 @@ const StringValue *Value::as_string_value() const
 
 const IntValue *Value::as_int_value() const
 {
-  if (_type != ValueType::Int) {
+  if (_type != eValueType::Int) {
     return nullptr;
   }
   return static_cast<const IntValue *>(this);
@@ -22,7 +22,7 @@ const IntValue *Value::as_int_value() const
 
 const FloatValue *Value::as_float_value() const
 {
-  if (_type != ValueType::Float) {
+  if (_type != eValueType::Float) {
     return nullptr;
   }
   return static_cast<const FloatValue *>(this);
@@ -30,7 +30,7 @@ const FloatValue *Value::as_float_value() const
 
 const BooleanValue *Value::as_boolean_value() const
 {
-  if (_type != ValueType::Boolean) {
+  if (_type != eValueType::Boolean) {
     return nullptr;
   }
   return static_cast<const BooleanValue *>(this);
@@ -38,7 +38,7 @@ const BooleanValue *Value::as_boolean_value() const
 
 const ArrayValue *Value::as_array_value() const
 {
-  if (_type != ValueType::Array) {
+  if (_type != eValueType::Array) {
     return nullptr;
   }
   return static_cast<const ArrayValue *>(this);
@@ -46,7 +46,7 @@ const ArrayValue *Value::as_array_value() const
 
 const ObjectValue *Value::as_object_value() const
 {
-  if (_type != ValueType::Object) {
+  if (_type != eValueType::Object) {
     return nullptr;
   }
   return static_cast<const ObjectValue *>(this);
@@ -55,17 +55,17 @@ const ObjectValue *Value::as_object_value() const
 static void convert_to_json(nlohmann::json &j, const Value &value)
 {
   switch (value.type()) {
-    case ValueType::String: {
+    case eValueType::String: {
       j = value.as_string_value()->string_value();
       break;
     }
 
-    case ValueType::Int: {
+    case eValueType::Int: {
       j = value.as_int_value()->value();
       break;
     }
 
-    case ValueType::Array: {
+    case eValueType::Array: {
       const ArrayValue::Items &items = value.as_array_value()->elements();
       for (const ArrayValue::Item &item_value : items) {
         nlohmann::json json_item;
@@ -75,7 +75,7 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
       break;
     }
 
-    case ValueType::Object: {
+    case eValueType::Object: {
       const ObjectValue::Items &attributes = value.as_object_value()->elements();
       for (const ObjectValue::Items::Item &attribute : attributes.items()) {
         nlohmann::json json_item;
@@ -85,17 +85,17 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
       break;
     }
 
-    case ValueType::Null: {
+    case eValueType::Null: {
       j = nullptr;
       break;
     }
 
-    case ValueType::Boolean: {
+    case eValueType::Boolean: {
       j = value.as_boolean_value()->value();
       break;
     }
 
-    case ValueType::Float: {
+    case eValueType::Float: {
       j = value.as_float_value()->value();
     }
   }

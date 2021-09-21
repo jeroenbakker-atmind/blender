@@ -34,7 +34,7 @@
 
 namespace blender::io::serialize {
 
-enum class ValueType {
+enum class eValueType {
   String,
   Int,
   Array,
@@ -44,33 +44,30 @@ enum class ValueType {
   Object,
 };
 
-// TODO: Should we use inheritance or the current flat structure. The current implementation was
-// done to keep the structure as flat as possible. Adding inheritance might lead to more
-// allocations. but keeps the code readability more clear...
 class Value;
 class StringValue;
-template<typename T, ValueType V> class PrimitiveValue;
-using IntValue = PrimitiveValue<uint64_t, ValueType::Int>;
-using FloatValue = PrimitiveValue<double, ValueType::Float>;
-using BooleanValue = PrimitiveValue<bool, ValueType::Boolean>;
+template<typename T, eValueType V> class PrimitiveValue;
+using IntValue = PrimitiveValue<uint64_t, eValueType::Int>;
+using FloatValue = PrimitiveValue<double, eValueType::Float>;
+using BooleanValue = PrimitiveValue<bool, eValueType::Boolean>;
 
-template<typename Container, typename ContainerItem, ValueType V> class ContainerValue;
+template<typename Container, typename ContainerItem, eValueType V> class ContainerValue;
 using ArrayValue =
-    ContainerValue<Vector<std::shared_ptr<Value>>, std::shared_ptr<Value>, ValueType::Array>;
+    ContainerValue<Vector<std::shared_ptr<Value>>, std::shared_ptr<Value>, eValueType::Array>;
 using ObjectValue = ContainerValue<Map<std::string, std::shared_ptr<Value>>,
                                    std::shared_ptr<Value>,
-                                   ValueType::Object>;
+                                   eValueType::Object>;
 
 class Value {
  private:
-  ValueType _type;
+  eValueType _type;
 
  public:
-  Value(ValueType type) : _type(type)
+  Value(eValueType type) : _type(type)
   {
   }
 
-  const ValueType type() const
+  const eValueType type() const
   {
     return _type;
   }
@@ -83,7 +80,7 @@ class Value {
   const ObjectValue *as_object_value() const;
 };
 
-template<typename T, ValueType V> class PrimitiveValue : public Value {
+template<typename T, eValueType V> class PrimitiveValue : public Value {
  private:
   T _inner_value;
 
@@ -100,7 +97,7 @@ template<typename T, ValueType V> class PrimitiveValue : public Value {
 
 class NullValue : public Value {
  public:
-  NullValue() : Value(ValueType::Null)
+  NullValue() : Value(eValueType::Null)
   {
   }
 };
@@ -110,7 +107,7 @@ class StringValue : public Value {
   std::string _string;
 
  public:
-  StringValue(const StringRef string) : Value(ValueType::String), _string(string)
+  StringValue(const StringRef string) : Value(eValueType::String), _string(string)
   {
   }
 
@@ -120,7 +117,7 @@ class StringValue : public Value {
   }
 };
 
-template<typename Container, typename ContainerItem, ValueType V>
+template<typename Container, typename ContainerItem, eValueType V>
 class ContainerValue : public Value {
  public:
   using Items = Container;
