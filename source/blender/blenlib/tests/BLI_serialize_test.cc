@@ -40,7 +40,7 @@ TEST(serialize, null_to_json)
 {
   JsonFormatter json;
   std::stringstream out;
-  Value test_value(ValueType::Null);
+  NullValue test_value;
   json.serialize(out, test_value);
   EXPECT_EQ(out.str(), "null");
 }
@@ -71,7 +71,7 @@ TEST(serialize, array_to_json)
   Vector<Value *> &array = value_array.array_items();
   array.append_as(new IntValue(42));
   array.append_as(new StringValue("Hello JSON"));
-  array.append_as(new Value(ValueType::Null));
+  array.append_as(new NullValue);
   array.append_as(new BooleanValue(false));
   array.append_as(new BooleanValue(true));
 

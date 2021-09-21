@@ -127,6 +127,13 @@ template<typename T, ValueType V> class PrimitiveValue : public Value {
   }
 };
 
+class NullValue : public Value {
+ public:
+  NullValue() : Value(ValueType::Null)
+  {
+  }
+};
+
 class StringValue : public Value {
  private:
   std::string _string;
