@@ -46,6 +46,7 @@ enum class eValueType {
 
 class Value;
 class StringValue;
+class ObjectValue;
 template<typename T, eValueType V> class PrimitiveValue;
 using IntValue = PrimitiveValue<uint64_t, eValueType::Int>;
 using FloatValue = PrimitiveValue<double, eValueType::Float>;
@@ -54,9 +55,6 @@ using BooleanValue = PrimitiveValue<bool, eValueType::Boolean>;
 template<typename Container, typename ContainerItem, eValueType V> class ContainerValue;
 using ArrayValue =
     ContainerValue<Vector<std::shared_ptr<Value>>, std::shared_ptr<Value>, eValueType::Array>;
-using ObjectValue = ContainerValue<Map<std::string, std::shared_ptr<Value>>,
-                                   std::shared_ptr<Value>,
-                                   eValueType::Object>;
 
 class Value {
  private:
@@ -141,6 +139,25 @@ class ContainerValue : public Value {
   Container &elements()
   {
     return _inner_value;
+  }
+};
+
+/**
+ * Object is a key value container where the key must by a std::string.
+ * Internally it is stored in a blender::Vector to ensure the order of keys.
+ */
+class ObjectValue : public ContainerValue<Vector<std::pair<std::string, std::shared_ptr<Value>>>,
+                                          std::pair<std::string, std::shared_ptr<Value>>,
+                                          eValueType::Object> {
+ public:
+  /** Return a lookup map to quickly lookup by key. */
+  const Map<std::string, std::shared_ptr<Value>> create_lookup() const
+  {
+    Map<std::string, std::shared_ptr<Value>> result;
+    for (const Item &item : elements()) {
+      result.add_as(item.first, item.second);
+    }
+    return result;
   }
 };
 

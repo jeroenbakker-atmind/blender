@@ -85,13 +85,13 @@ TEST(serialize, object_to_json)
   std::stringstream out;
   ObjectValue value_object;
   ObjectValue::Items &attributes = value_object.elements();
-  attributes.add_as(std::string("best_number"), new IntValue(42));
+  attributes.append_as(std::pair(std::string("best_number"), new IntValue(42)));
 
   json.serialize(out, value_object);
   EXPECT_EQ(out.str(), "{\"best_number\":42}");
 }
 
-TEST(serialize, roundtrip_json)
+TEST(serialize, json_roundtrip_ordering)
 {
   std::string input =
       "[{\"_id\":\"614ada7c476c472ecbd0ecbb\",\"index\":0,\"guid\":\"d5b81381-cef8-4327-923d-"
@@ -192,6 +192,8 @@ TEST(serialize, roundtrip_json)
   std::stringstream out;
   json.serialize(out, *value);
   EXPECT_EQ(out.str(), input);
+
+  delete value;
 }
 
 }  // namespace blender::io::serialize::json::testing
