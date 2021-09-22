@@ -101,6 +101,11 @@ static void convert_to_json(nlohmann::json &j, const Value &value)
   }
 }
 
+static Value *convert_from_json(const nlohmann::json &j)
+{
+  return nullptr;
+}
+
 void JsonFormatter::serialize(std::ostream &os, Value &value)
 {
   nlohmann::json j;
@@ -111,6 +116,14 @@ void JsonFormatter::serialize(std::ostream &os, Value &value)
   else {
     os << j.dump();
   }
+}
+
+Value *JsonFormatter::deserialize(std::istream &is)
+{
+  nlohmann::json j;
+  is >> j;
+  Value *value = convert_from_json(j);
+  return value;
 }
 
 }  // namespace blender::io::serialize

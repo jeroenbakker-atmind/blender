@@ -144,12 +144,19 @@ class ContainerValue : public Value {
   }
 };
 
-class JsonFormatter {
+class Formatter {
+ public:
+  virtual void serialize(std::ostream &os, Value &value) = 0;
+  virtual Value *deserialize(std::istream &is) = 0;
+};
+
+class JsonFormatter : public Formatter {
  public:
   uint8_t indentation_len = 0;
 
  public:
-  void serialize(std::ostream &os, Value &value);
+  void serialize(std::ostream &os, Value &value) override;
+  Value *deserialize(std::istream &is) override;
 };
 
 }  // namespace blender::io::serialize
