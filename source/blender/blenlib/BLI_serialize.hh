@@ -27,7 +27,6 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
-#include <optional>
 #include <ostream>
 
 #pragma once
