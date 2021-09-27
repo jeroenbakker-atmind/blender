@@ -88,6 +88,8 @@
 
 #include "atomic_ops.h"
 
+#include "file_indexer.h"
+
 #include "filelist.h"
 
 #define FILEDIR_NBR_ENTRIES_UNSET -1
@@ -394,6 +396,7 @@ typedef struct FileList {
   short sort;
 
   FileListFilter filter_data;
+  FileIndexer *indexer;
 
   struct FileListIntern filelist_intern;
 
@@ -1031,6 +1034,19 @@ void filelist_setfilter_options(FileList *filelist,
     /* And now, free filtered data so that we know we have to filter again. */
     filelist_filter_clear(filelist);
   }
+}
+
+/**
+ * Set the indexer to be used by the filelist.
+ *
+ * The given indexer allocation should be handled by the caller or defined statically.
+ */
+void filelist_indexer_set(FileList *filelist, FileIndexer *indexer)
+{
+  BLI_assert(filelist);
+  BLI_assert(indexer);
+
+  filelist->indexer = indexer;
 }
 
 /**
@@ -1702,6 +1718,8 @@ FileList *filelist_new(short type)
   p->selection_state = BLI_ghash_new(BLI_ghashutil_inthash_p, BLI_ghashutil_intcmp, __func__);
   p->filelist.nbr_entries = FILEDIR_NBR_ENTRIES_UNSET;
   filelist_settype(p, type);
+
+  p->indexer = &file_indexer_default;
 
   return p;
 }
@@ -2910,6 +2928,29 @@ static FileListInternEntry *filelist_readjob_list_lib_group_create(const int idc
   return entry;
 }
 
+static void filelist_readjob_list_lib_add_datablock(ListBase *entries,
+                                                    BLODataBlockInfo *datablock_info,
+                                                    const bool prefix_relpath_with_group_name,
+                                                    const int idcode,
+                                                    const char *group_name)
+{
+  FileListInternEntry *entry = MEM_callocN(sizeof(*entry), __func__);
+  if (prefix_relpath_with_group_name) {
+    entry->relpath = BLI_sprintfN("%s/%s", group_name, datablock_info->name);
+  }
+  else {
+    entry->relpath = BLI_strdup(datablock_info->name);
+  }
+  entry->typeflag |= FILE_TYPE_BLENDERLIB;
+  if (datablock_info && datablock_info->asset_data) {
+    entry->typeflag |= FILE_TYPE_ASSET;
+    /* Moves ownership! */
+    entry->imported_asset_data = datablock_info->asset_data;
+  }
+  entry->blentype = idcode;
+  BLI_addtail(entries, entry);
+}
+
 static void filelist_readjob_list_lib_add_datablocks(ListBase *entries,
                                                      LinkNode *datablock_infos,
                                                      const bool prefix_relpath_with_group_name,
@@ -2917,29 +2958,27 @@ static void filelist_readjob_list_lib_add_datablocks(ListBase *entries,
                                                      const char *group_name)
 {
   for (LinkNode *ln = datablock_infos; ln; ln = ln->next) {
-    struct BLODataBlockInfo *info = ln->link;
-    FileListInternEntry *entry = MEM_callocN(sizeof(*entry), __func__);
-    if (prefix_relpath_with_group_name) {
-      entry->relpath = BLI_sprintfN("%s/%s", group_name, info->name);
-    }
-    else {
-      entry->relpath = BLI_strdup(info->name);
-    }
-    entry->typeflag |= FILE_TYPE_BLENDERLIB;
-    if (info && info->asset_data) {
-      entry->typeflag |= FILE_TYPE_ASSET;
-      /* Moves ownership! */
-      entry->imported_asset_data = info->asset_data;
-    }
-    entry->blentype = idcode;
-    BLI_addtail(entries, entry);
+    struct BLODataBlockInfo *datablock_info = ln->link;
+    filelist_readjob_list_lib_add_datablock(
+        entries, datablock_info, prefix_relpath_with_group_name, idcode, group_name);
   }
+}
+
+static FileListInternEntry *filelist_readjob_list_lib_parent_entry_create(void)
+{
+  FileListInternEntry *entry = MEM_callocN(sizeof(*entry), __func__);
+  entry->relpath = BLI_strdup(FILENAME_PARENT);
+  entry->typeflag |= (FILE_TYPE_BLENDERLIB | FILE_TYPE_DIR);
+  return entry;
 }
 
 static int filelist_readjob_list_lib(const char *root,
                                      ListBase *entries,
-                                     const ListLibOptions options)
+                                     const ListLibOptions options,
+                                     const FileIndexer *indexer)
 {
+  BLI_assert(indexer);
+
   char dir[FILE_MAX_LIBEXTRA], *group;
 
   struct BlendHandle *libfiledata = NULL;
@@ -2954,6 +2993,34 @@ static int filelist_readjob_list_lib(const char *root,
     return 0;
   }
 
+  int parent_len = 0;
+
+  /* Try read from indexer. */
+  int read_from_index = 0;
+  LinkNode /*FileIndexerEntry*/ *indexer_entries = NULL;
+  eFileIndexerResult indexer_result = indexer->read_index(dir, &indexer_entries, &read_from_index);
+  if (indexer_result == FILE_INDEXER_READ_FROM_INDEX) {
+    /* Add current parent when requested. */
+    if (options & LIST_LIB_ADD_PARENT) {
+      FileListInternEntry *entry = filelist_readjob_list_lib_parent_entry_create();
+      BLI_addtail(entries, entry);
+      parent_len = 1;
+    }
+
+    /* TODO(jbakker): Create FileListInternEntry from FileIndexerEntry. */
+    for (LinkNode *ln = indexer_entries; ln; ln = ln->next) {
+      FileIndexerEntry *indexer_entry = (FileIndexerEntry *)ln;
+      filelist_readjob_list_lib_add_datablock(entries,
+                                              &indexer_entry->datablock_info,
+                                              true,
+                                              indexer_entry->idcode,
+                                              indexer_entry->group_name);
+    }
+
+    return read_from_index + parent_len;
+  }
+  /* Store the last entry, so we know where to start updating the index. */
+
   /* Open the library file. */
   BlendFileReadReport bf_reports = {.reports = NULL};
   libfiledata = BLO_blendhandle_from_file(dir, &bf_reports);
@@ -2962,11 +3029,8 @@ static int filelist_readjob_list_lib(const char *root,
   }
 
   /* Add current parent when requested. */
-  int parent_len = 0;
   if (options & LIST_LIB_ADD_PARENT) {
-    FileListInternEntry *entry = MEM_callocN(sizeof(*entry), __func__);
-    entry->relpath = BLI_strdup(FILENAME_PARENT);
-    entry->typeflag |= (FILE_TYPE_BLENDERLIB | FILE_TYPE_DIR);
+    FileListInternEntry *entry = filelist_readjob_list_lib_parent_entry_create();
     BLI_addtail(entries, entry);
     parent_len = 1;
   }
@@ -3007,6 +3071,11 @@ static int filelist_readjob_list_lib(const char *root,
   }
 
   BLO_blendhandle_close(libfiledata);
+
+  /* Update the index. */
+  /* TODO: We should keep references to the created BLODataBlockInfo as this is publically
+   * available. */
+  indexer->update_index(dir, indexer_entries);
 
   /* Return the number of items added to entries. */
   int added_entries_len = group_len + datablock_len + parent_len;
@@ -3310,7 +3379,8 @@ static void filelist_readjob_do(const bool do_lib,
       if (filelist->asset_library_ref) {
         list_lib_options |= LIST_LIB_ASSETS_ONLY;
       }
-      nbr_entries = filelist_readjob_list_lib(subdir, &entries, list_lib_options);
+      nbr_entries = filelist_readjob_list_lib(
+          subdir, &entries, list_lib_options, filelist->indexer);
       if (nbr_entries > 0) {
         is_lib = true;
       }

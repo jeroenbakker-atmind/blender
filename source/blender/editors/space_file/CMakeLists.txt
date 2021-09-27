@@ -35,6 +35,7 @@ set(INC
 
 set(SRC
   file_draw.c
+  file_indexer.cc
   file_ops.c
   file_panels.c
   file_utils.c
@@ -43,6 +44,7 @@ set(SRC
   fsmenu.c
   space_file.c
 
+  file_indexer.h
   file_intern.h
   filelist.h
   fsmenu.h
