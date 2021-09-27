@@ -1132,7 +1132,7 @@ static void particle_batch_cache_ensure_procedural_pos(PTCacheEdit *edit,
     cache->point_tex = GPU_texture_create_from_vertbuf("part_point", cache->proc_point_buf);
   }
 
-  /* Checking hair length seperatly, only allocating gpu memory when needed */
+  /* Checking hair length separately, only allocating gpu memory when needed. */
   if (gpu_material && cache->proc_length_buf != NULL && cache->length_tex == NULL) {
     ListBase gpu_attrs = GPU_material_attributes(gpu_material);
     LISTBASE_FOREACH (GPUMaterialAttribute *, attr, &gpu_attrs) {
@@ -1697,9 +1697,11 @@ bool particles_ensure_procedural_data(Object *object,
   (*r_hair_cache)->final[subdiv].strands_res = 1 << (part->draw_step + subdiv);
 
   /* Refreshed on combing and simulation. */
-  if ((*r_hair_cache)->proc_point_buf == NULL || (gpu_material && (*r_hair_cache)->length_tex == NULL)) {
+  if ((*r_hair_cache)->proc_point_buf == NULL ||
+      (gpu_material && (*r_hair_cache)->length_tex == NULL)) {
     ensure_seg_pt_count(source.edit, source.psys, &cache->hair);
-    particle_batch_cache_ensure_procedural_pos(source.edit, source.psys, &cache->hair, gpu_material);
+    particle_batch_cache_ensure_procedural_pos(
+        source.edit, source.psys, &cache->hair, gpu_material);
     need_ft_update = true;
   }
 
