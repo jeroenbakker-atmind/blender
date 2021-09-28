@@ -26,6 +26,8 @@
 #include "BLI_serialize.hh"
 #include "BLI_string_ref.hh"
 
+#include "DNA_asset_types.h"
+
 #include <fstream>
 #include <optional>
 
@@ -68,16 +70,38 @@ class AssetFile : public File {
 static void build_file_indexer_entry(blender::io::serialize::ObjectValue &result,
                                      const FileIndexerEntry *indexer_entry)
 {
-
+  const BLODataBlockInfo &datablock_info = indexer_entry->datablock_info;
   blender::io::serialize::ObjectValue::Items &attributes = result.elements();
-  attributes.append_as(
-      std::pair(std::string("name"),
-                new blender::io::serialize::StringValue(indexer_entry->datablock_info.name)));
+
+  attributes.append_as(std::pair(std::string("name"),
+                                 new blender::io::serialize::StringValue(datablock_info.name)));
   attributes.append_as(
       std::pair(std::string("group_name"),
                 new blender::io::serialize::StringValue(indexer_entry->group_name)));
   attributes.append_as(std::pair(std::string("idcode"),
                                  new blender::io::serialize::IntValue(indexer_entry->idcode)));
+
+  const AssetMetaData &asset_data = *datablock_info.asset_data;
+  // TODO: catalog_id
+  attributes.append_as(
+      std::pair(std::string("catalog_name"),
+                new blender::io::serialize::StringValue(asset_data.catalog_simple_name)));
+
+  if (asset_data.description != nullptr) {
+    attributes.append_as(
+        std::pair(std::string("description"),
+                  new blender::io::serialize::StringValue(asset_data.description)));
+  }
+
+  if (!BLI_listbase_is_empty(&asset_data.tags)) {
+    blender::io::serialize::ArrayValue *tags = new blender::io::serialize::ArrayValue();
+    attributes.append_as(std::pair(std::string("tags"), tags));
+    blender::io::serialize::ArrayValue::Items &tag_items = tags->elements();
+
+    LISTBASE_FOREACH (AssetTag *, tag, &asset_data.tags) {
+      tag_items.append_as(new blender::io::serialize::StringValue(tag->name));
+    }
+  }
 }
 
 struct AssetIndex {
