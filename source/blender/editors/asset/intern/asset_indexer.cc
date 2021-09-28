@@ -108,6 +108,8 @@ static void build_file_indexer_entry(blender::io::serialize::ObjectValue &result
       tag_items.append_as(new blender::io::serialize::StringValue(tag->name));
     }
   }
+
+  /* TODO: asset_data.IDProperties */
 }
 
 struct AssetIndex {
@@ -150,6 +152,10 @@ struct AssetIndex {
     }
   }
 
+  AssetIndex(const blender::io::serialize::ObjectValue value) : data(value)
+  {
+  }
+
   const bool is_latest_version() const
   {
     /* TODO: check actual version */
@@ -189,6 +195,14 @@ class AssetIndexFile : public File {
 
   std::optional<AssetIndex> read_contents() const
   {
+    blender::io::serialize::JsonFormatter formatter;
+    std::ifstream is;
+    is.open(file_name);
+    Value *result = formatter.deserialize(os);
+    is.close();
+
+    // TODO: deserialize. Perhaps make AssetIndex->data a pointer.
+
     return std::nullopt;
   }
 
