@@ -30,7 +30,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-namespace blender::editor::file::indexer {
+namespace blender::ed::file::indexer {
 
 static eFileIndexerResult read_index(const char *UNUSED(file_name),
                                      FileIndexerEntries *UNUSED(entries),
@@ -62,7 +62,7 @@ static FileIndexerEntry *file_indexer_entry_create_from_datablock_info(
   return entry;
 }
 
-}  // namespace blender::editor::file::indexer
+}  // namespace blender::ed::file::indexer
 
 extern "C" {
 
@@ -75,7 +75,7 @@ void ED_file_indexer_entries_extend_from_datablock_infos(
   for (const LinkNode *ln = datablock_infos; ln; ln = ln->next) {
     const BLODataBlockInfo *datablock_info = static_cast<const BLODataBlockInfo *>(ln->link);
     FileIndexerEntry *file_indexer_entry =
-        blender::editor::file::indexer::file_indexer_entry_create_from_datablock_info(
+        blender::ed::file::indexer::file_indexer_entry_create_from_datablock_info(
             datablock_info, idcode, group);
     BLI_linklist_prepend(&indexer_entries->entries, file_indexer_entry);
   }
@@ -92,5 +92,5 @@ void ED_file_indexer_entries_clear(FileIndexerEntries *indexer_entries)
   indexer_entries->entries = nullptr;
 }
 
-FileIndexer file_indexer_default = blender::editor::file::indexer::default_indexer();
+FileIndexer file_indexer_default = blender::ed::file::indexer::default_indexer();
 }
