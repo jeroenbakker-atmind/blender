@@ -33,6 +33,7 @@ set(INC_SYS
 set(SRC
   intern/asset_filter.cc
   intern/asset_handle.cc
+  intern/asset_indexer.cc
   intern/asset_library_reference.cc
   intern/asset_library_reference_enum.cc
   intern/asset_list.cc
