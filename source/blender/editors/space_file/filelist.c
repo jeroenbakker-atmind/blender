@@ -2941,7 +2941,7 @@ static FileListInternEntry *filelist_readjob_list_lib_group_create(const int idc
 }
 
 static void filelist_readjob_list_lib_add_datablock(ListBase *entries,
-                                                    BLODataBlockInfo *datablock_info,
+                                                    const BLODataBlockInfo *datablock_info,
                                                     const bool prefix_relpath_with_group_name,
                                                     const int idcode,
                                                     const char *group_name)
@@ -2976,6 +2976,21 @@ static void filelist_readjob_list_lib_add_datablocks(ListBase *entries,
   }
 }
 
+static void filelist_readjob_list_lib_add_indexer_entries(
+    ListBase *entries,
+    const FileIndexerEntries *indexer_entries,
+    const bool prefix_relpath_with_group_name)
+{
+  for (const LinkNode *ln = indexer_entries->entries; ln; ln = ln->next) {
+    const FileIndexerEntry *indexer_entry = (const FileIndexerEntry *)ln->link;
+    filelist_readjob_list_lib_add_datablock(entries,
+                                            &indexer_entry->datablock_info,
+                                            prefix_relpath_with_group_name,
+                                            indexer_entry->idcode,
+                                            indexer_entry->group_name);
+  }
+}
+
 static FileListInternEntry *filelist_readjob_list_lib_parent_entry_create(void)
 {
   FileListInternEntry *entry = MEM_callocN(sizeof(*entry), __func__);
@@ -3005,33 +3020,30 @@ static int filelist_readjob_list_lib(const char *root,
     return 0;
   }
 
+  const bool group_came_from_path = group != NULL;
   int parent_len = 0;
 
   /* Try read from indexer. */
-  int read_from_index = 0;
-  LinkNode /*FileIndexerEntry*/ *indexer_entries = NULL;
-  eFileIndexerResult indexer_result = indexer->read_index(dir, &indexer_entries, &read_from_index);
-  if (indexer_result == FILE_INDEXER_READ_FROM_INDEX) {
-    /* Add current parent when requested. */
-    if (options & LIST_LIB_ADD_PARENT) {
-      FileListInternEntry *entry = filelist_readjob_list_lib_parent_entry_create();
-      BLI_addtail(entries, entry);
-      parent_len = 1;
-    }
+  const bool use_indexer = !group_came_from_path;
+  FileIndexerEntries indexer_entries = {NULL};
+  if (use_indexer) {
+    int read_from_index = 0;
+    eFileIndexerResult indexer_result = indexer->read_index(
+        dir, &indexer_entries, &read_from_index);
+    if (indexer_result == FILE_INDEXER_READ_FROM_INDEX) {
+      /* Add current parent when requested. */
+      if (options & LIST_LIB_ADD_PARENT) {
+        FileListInternEntry *entry = filelist_readjob_list_lib_parent_entry_create();
+        BLI_addtail(entries, entry);
+        parent_len = 1;
+      }
 
-    /* TODO(jbakker): Create FileListInternEntry from FileIndexerEntry. */
-    for (LinkNode *ln = indexer_entries; ln; ln = ln->next) {
-      FileIndexerEntry *indexer_entry = (FileIndexerEntry *)ln;
-      filelist_readjob_list_lib_add_datablock(entries,
-                                              &indexer_entry->datablock_info,
-                                              true,
-                                              indexer_entry->idcode,
-                                              indexer_entry->group_name);
-    }
+      filelist_readjob_list_lib_add_indexer_entries(entries, &indexer_entries, true);
+      ED_file_indexer_entries_clear(&indexer_entries);
 
-    return read_from_index + parent_len;
+      return read_from_index + parent_len;
+    }
   }
-  /* Store the last entry, so we know where to start updating the index. */
 
   /* Open the library file. */
   BlendFileReadReport bf_reports = {.reports = NULL};
@@ -3049,7 +3061,6 @@ static int filelist_readjob_list_lib(const char *root,
 
   int group_len = 0;
   int datablock_len = 0;
-  const bool group_came_from_path = group != NULL;
   if (group_came_from_path) {
     const int idcode = groupname_to_code(group);
     LinkNode *datablock_infos = BLO_blendhandle_get_datablock_info(
@@ -3074,6 +3085,10 @@ static int filelist_readjob_list_lib(const char *root,
             libfiledata, idcode, options & LIST_LIB_ASSETS_ONLY, &group_datablock_len);
         filelist_readjob_list_lib_add_datablocks(
             entries, group_datablock_infos, true, idcode, group_name);
+        if (use_indexer) {
+          ED_file_indexer_entries_extend_from_datablock_infos(
+              &indexer_entries, group_datablock_infos, idcode, group);
+        }
         BLI_linklist_freeN(group_datablock_infos);
         datablock_len += group_datablock_len;
       }
@@ -3085,9 +3100,10 @@ static int filelist_readjob_list_lib(const char *root,
   BLO_blendhandle_close(libfiledata);
 
   /* Update the index. */
-  /* TODO: We should keep references to the created BLODataBlockInfo as this is publically
-   * available. */
-  indexer->update_index(dir, indexer_entries);
+  if (use_indexer) {
+    indexer->update_index(dir, &indexer_entries);
+    ED_file_indexer_entries_clear(&indexer_entries);
+  }
 
   /* Return the number of items added to entries. */
   int added_entries_len = group_len + datablock_len + parent_len;

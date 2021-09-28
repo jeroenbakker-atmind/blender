@@ -36,20 +36,29 @@ typedef struct FileIndexerEntry {
   /* TODO(jbakker): de-devil this... */
   char group_name[666];
   short idcode;
-
 } FileIndexerEntry;
 
-typedef eFileIndexerResult (*FileIndexerReadIndexFunc)(
-    const char *file_name,
-    struct LinkNode /* FileIndexerEntry */ **entries,
-    int *r_read_entries_len);
-typedef void (*FileIndexerUpdateIndexFunc)(const char *file_name,
-                                           struct LinkNode /* FileIndexerEntry */ *entries);
+typedef struct FileIndexerEntries {
+  struct LinkNode /* FileIndexerEntry */ *entries;
+} FileIndexerEntries;
+
+typedef eFileIndexerResult (*FileIndexerReadIndexFunc)(const char *file_name,
+                                                       FileIndexerEntries *entries,
+                                                       int *r_read_entries_len);
+typedef void (*FileIndexerUpdateIndexFunc)(const char *file_name, FileIndexerEntries *entries);
 
 typedef struct FileIndexer {
   FileIndexerReadIndexFunc read_index;
   FileIndexerUpdateIndexFunc update_index;
 } FileIndexer;
+
+/* file_indexer.cc */
+void ED_file_indexer_entries_clear(FileIndexerEntries *indexer_entries);
+void ED_file_indexer_entries_extend_from_datablock_infos(
+    FileIndexerEntries *indexer_entries,
+    const LinkNode * /* BLODataBlockInfo */ datablock_infos,
+    const int idcode,
+    const char *group);
 
 #ifdef __cplusplus
 }

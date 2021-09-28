@@ -23,21 +23,23 @@
  */
 #include "file_indexer.h"
 
+#include "MEM_guardedalloc.h"
+
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
+#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 namespace blender::editor::file::indexer {
 
 static eFileIndexerResult read_index(const char *UNUSED(file_name),
-                                     LinkNode /* FileIndexerEntry */ **UNUSED(entries),
+                                     FileIndexerEntries *UNUSED(entries),
                                      int *UNUSED(r_read_entries_len))
 {
   return FILE_INDEXER_NEEDS_UPDATE;
 }
 
-static void update_index(const char *UNUSED(file_name),
-                         LinkNode /* FileIndexerEntry */ *UNUSED(entries))
+static void update_index(const char *UNUSED(file_name), FileIndexerEntries *UNUSED(entries))
 {
 }
 
@@ -49,8 +51,46 @@ constexpr FileIndexer default_indexer()
   return indexer;
 }
 
+static FileIndexerEntry *file_indexer_entry_create_from_datablock_info(
+    const BLODataBlockInfo *datablock_info, const int idcode, const char *group)
+{
+  FileIndexerEntry *entry = static_cast<FileIndexerEntry *>(
+      MEM_mallocN(sizeof(FileIndexerEntry), __func__));
+  entry->datablock_info = *datablock_info;
+  entry->idcode = idcode;
+  BLI_strncpy(entry->group_name, group, sizeof(entry->group_name));
+  return entry;
+}
+
 }  // namespace blender::editor::file::indexer
 
 extern "C" {
+
+void ED_file_indexer_entries_extend_from_datablock_infos(
+    FileIndexerEntries *indexer_entries,
+    const LinkNode * /* BLODataBlockInfo */ datablock_infos,
+    const int idcode,
+    const char *group)
+{
+  for (const LinkNode *ln = datablock_infos; ln; ln = ln->next) {
+    const BLODataBlockInfo *datablock_info = static_cast<const BLODataBlockInfo *>(ln->link);
+    FileIndexerEntry *file_indexer_entry =
+        blender::editor::file::indexer::file_indexer_entry_create_from_datablock_info(
+            datablock_info, idcode, group);
+    BLI_linklist_prepend(&indexer_entries->entries, file_indexer_entry);
+  }
+}
+
+static void ED_file_indexer_entry_free(void *indexer_entry)
+{
+  MEM_freeN(indexer_entry);
+}
+
+void ED_file_indexer_entries_clear(FileIndexerEntries *indexer_entries)
+{
+  BLI_linklist_free(indexer_entries->entries, ED_file_indexer_entry_free);
+  indexer_entries->entries = nullptr;
+}
+
 FileIndexer file_indexer_default = blender::editor::file::indexer::default_indexer();
 }

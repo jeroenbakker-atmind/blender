@@ -25,6 +25,7 @@ extern "C" {
 
 extern FileIndexer file_indexer_default;
 
+
 #ifdef __cplusplus
 }
 #endif
