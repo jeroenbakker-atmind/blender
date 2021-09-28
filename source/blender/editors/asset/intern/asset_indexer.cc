@@ -22,8 +22,10 @@
 
 #include "BLI_fileops.h"
 #include "BLI_path_util.h"
+#include "BLI_serialize.hh"
 #include "BLI_string_ref.hh"
 
+#include <fstream>
 #include <optional>
 
 namespace blender::ed::asset {
@@ -64,16 +66,29 @@ class AssetFile : public File {
 
 struct AssetIndex {
   const int LAST_VERSION = 1;
-  int version = LAST_VERSION;
+
+  blender::io::serialize::ObjectValue data;
 
   AssetIndex(const FileIndexerEntries &indexer_entries)
   {
+    blender::io::serialize::ObjectValue::Items &attributes = data.elements();
+    attributes.append_as(
+        std::pair(std::string("version"), new blender::io::serialize::IntValue(LAST_VERSION)));
+
+    if (indexer_entries.entries == nullptr) {
+      return;
+    }
   }
 
   const bool is_latest_version() const
   {
     /* TODO: check actual version */
     return true;
+  }
+
+  const int copy_into(FileIndexerEntries &indexer_entries) const
+  {
+    return 0;
   }
 };
 
@@ -109,12 +124,17 @@ class AssetIndexFile : public File {
 
   void write_contents(AssetIndex &content)
   {
+    blender::io::serialize::JsonFormatter formatter;
+    std::ofstream os;
+    os.open(file_name, std::ios::out | std::ios::trunc);
+    formatter.serialize(os, content.data);
+    os.close();
   }
 };
 
 static eFileIndexerResult read_index(const char *file_name,
-                                     FileIndexerEntries *UNUSED(entries),
-                                     int *UNUSED(r_read_entries_len))
+                                     FileIndexerEntries *entries,
+                                     int *r_read_entries_len)
 {
   AssetFile asset_file(file_name);
   AssetIndexFile asset_index_file(asset_file);
@@ -139,6 +159,8 @@ static eFileIndexerResult read_index(const char *file_name,
   if (!contents->is_latest_version()) {
     return FILE_INDEXER_NEEDS_UPDATE;
   }
+
+  *r_read_entries_len = contents->copy_into(*entries);
 
   return FILE_INDEXER_READ_FROM_INDEX;
 }
