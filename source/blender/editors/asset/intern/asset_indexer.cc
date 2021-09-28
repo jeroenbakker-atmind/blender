@@ -25,6 +25,7 @@
 #include "BLI_path_util.h"
 #include "BLI_serialize.hh"
 #include "BLI_string_ref.hh"
+#include "BLI_uuid.h"
 
 #include "DNA_asset_types.h"
 
@@ -82,7 +83,12 @@ static void build_file_indexer_entry(blender::io::serialize::ObjectValue &result
                                  new blender::io::serialize::IntValue(indexer_entry->idcode)));
 
   const AssetMetaData &asset_data = *datablock_info.asset_data;
-  // TODO: catalog_id
+
+  char catalog_id[UUID_STRING_LEN];
+  BLI_uuid_format(catalog_id, asset_data.catalog_id);
+  attributes.append_as(
+      std::pair(std::string("catalog_id"), new blender::io::serialize::StringValue(catalog_id)));
+
   attributes.append_as(
       std::pair(std::string("catalog_name"),
                 new blender::io::serialize::StringValue(asset_data.catalog_simple_name)));
