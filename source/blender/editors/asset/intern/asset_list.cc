@@ -48,6 +48,7 @@
 #include "ED_asset_handle.h"
 #include "ED_asset_list.h"
 #include "ED_asset_list.hh"
+#include "asset_indexer.hh"
 #include "asset_library_reference.hh"
 
 namespace blender::ed::asset {
@@ -170,6 +171,7 @@ void AssetList::setup()
       true,
       "",
       "");
+  filelist_setindexer(files, &file_indexer_asset);
 
   char path[FILE_MAXDIR] = "";
   if (user_library) {

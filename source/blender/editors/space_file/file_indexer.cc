@@ -92,5 +92,5 @@ void ED_file_indexer_entries_clear(FileIndexerEntries *indexer_entries)
   indexer_entries->entries = nullptr;
 }
 
-FileIndexer file_indexer_default = blender::ed::file::indexer::default_indexer();
+const FileIndexer file_indexer_default = blender::ed::file::indexer::default_indexer();
 }

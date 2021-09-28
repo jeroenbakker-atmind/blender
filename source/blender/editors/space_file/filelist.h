@@ -72,7 +72,7 @@ void filelist_setfilter_options(struct FileList *filelist,
                                 const bool filter_assets_only,
                                 const char *filter_glob,
                                 const char *filter_search);
-void filelist_indexer_set(struct FileList *filelist, struct FileIndexer *indexer);
+void filelist_setindexer(struct FileList *filelist, const struct FileIndexer *indexer);
 void filelist_filter(struct FileList *filelist);
 void filelist_setlibrary(struct FileList *filelist,
                          const struct AssetLibraryReference *asset_library_ref);

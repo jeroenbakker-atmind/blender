@@ -396,7 +396,7 @@ typedef struct FileList {
   short sort;
 
   FileListFilter filter_data;
-  FileIndexer *indexer;
+  const FileIndexer *indexer;
 
   struct FileListIntern filelist_intern;
 
@@ -1045,7 +1045,7 @@ void filelist_setfilter_options(FileList *filelist,
  *
  * The given indexer allocation should be handled by the caller or defined statically.
  */
-void filelist_indexer_set(FileList *filelist, FileIndexer *indexer)
+void filelist_setindexer(FileList *filelist, const FileIndexer *indexer)
 {
   BLI_assert(filelist);
   BLI_assert(indexer);

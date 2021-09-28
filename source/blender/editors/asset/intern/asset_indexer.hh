@@ -23,4 +23,7 @@
 #include "ED_file_indexer.h"
 
 namespace blender::ed::asset {
-}
+
+extern const FileIndexer file_indexer_asset;
+
+}  // namespace blender::ed::asset
