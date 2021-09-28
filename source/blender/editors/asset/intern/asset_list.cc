@@ -46,9 +46,9 @@
 #include "../space_file/filelist.h"
 
 #include "ED_asset_handle.h"
+#include "ED_asset_indexer.h"
 #include "ED_asset_list.h"
 #include "ED_asset_list.hh"
-#include "asset_indexer.hh"
 #include "asset_library_reference.hh"
 
 namespace blender::ed::asset {

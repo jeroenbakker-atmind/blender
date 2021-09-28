@@ -20,10 +20,14 @@
 
 #pragma once
 
-#include "ED_file_indexer.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace blender::ed::asset {
+#include "ED_file_indexer.h"
 
 extern const FileIndexer file_indexer_asset;
 
-}  // namespace blender::ed::asset
+#ifdef __cplusplus
+}
+#endif

@@ -18,9 +18,10 @@
  * \ingroup edasset
  */
 
-#include "asset_indexer.hh"
+#include "ED_asset_indexer.h"
 
 #include "BLI_fileops.h"
+#include "BLI_linklist.h"
 #include "BLI_path_util.h"
 #include "BLI_serialize.hh"
 #include "BLI_string_ref.hh"
@@ -64,6 +65,21 @@ class AssetFile : public File {
   }
 };
 
+static void build_file_indexer_entry(blender::io::serialize::ObjectValue &result,
+                                     const FileIndexerEntry *indexer_entry)
+{
+
+  blender::io::serialize::ObjectValue::Items &attributes = result.elements();
+  attributes.append_as(
+      std::pair(std::string("name"),
+                new blender::io::serialize::StringValue(indexer_entry->datablock_info.name)));
+  attributes.append_as(
+      std::pair(std::string("group_name"),
+                new blender::io::serialize::StringValue(indexer_entry->group_name)));
+  attributes.append_as(std::pair(std::string("idcode"),
+                                 new blender::io::serialize::IntValue(indexer_entry->idcode)));
+}
+
 struct AssetIndex {
   const int LAST_VERSION = 1;
 
@@ -71,12 +87,36 @@ struct AssetIndex {
 
   AssetIndex(const FileIndexerEntries &indexer_entries)
   {
-    blender::io::serialize::ObjectValue::Items &attributes = data.elements();
-    attributes.append_as(
+    blender::io::serialize::ObjectValue::Items &root_attributes = data.elements();
+    root_attributes.append_as(
         std::pair(std::string("version"), new blender::io::serialize::IntValue(LAST_VERSION)));
 
     if (indexer_entries.entries == nullptr) {
       return;
+    }
+
+    blender::io::serialize::ArrayValue *entries = new blender::io::serialize::ArrayValue();
+    blender::io::serialize::ArrayValue::Items &items = entries->elements();
+
+    for (LinkNode *ln = indexer_entries.entries; ln; ln = ln->next) {
+      const FileIndexerEntry *indexer_entry = static_cast<const FileIndexerEntry *>(ln->link);
+      /* TODO: We also get none asset types (Brushes/Workspaces), this seems like an implementation
+       * flaw. */
+      if (indexer_entry->datablock_info.asset_data == nullptr) {
+        continue;
+      }
+      blender::io::serialize::ObjectValue *entry_value = new blender::io::serialize::ObjectValue();
+      build_file_indexer_entry(*entry_value, indexer_entry);
+      items.append_as(entry_value);
+    }
+
+    /* When no entries to index, we should not store the entries attribute as this would make the
+     * size bigger than the MIN_FILE_SIZE_WITH_ENTRIES. */
+    if (items.is_empty()) {
+      delete entries;
+    }
+    else {
+      root_attributes.append_as(std::pair(std::string("entries"), entries));
     }
   }
 
@@ -94,7 +134,7 @@ struct AssetIndex {
 
 class AssetIndexFile : public File {
  public:
-  const size_t MIN_FILE_SIZE_WITH_ENTRIES = 10;
+  const size_t MIN_FILE_SIZE_WITH_ENTRIES = 32;
   std::string file_name;
 
   AssetIndexFile(AssetFile &asset_file_name) : file_name(asset_file_name.index_file_path())
@@ -125,6 +165,9 @@ class AssetIndexFile : public File {
   void write_contents(AssetIndex &content)
   {
     blender::io::serialize::JsonFormatter formatter;
+#if DEBUG
+    formatter.indentation_len = 2;
+#endif
     std::ofstream os;
     os.open(file_name, std::ios::out | std::ios::trunc);
     formatter.serialize(os, content.data);
@@ -136,6 +179,9 @@ static eFileIndexerResult read_index(const char *file_name,
                                      FileIndexerEntries *entries,
                                      int *r_read_entries_len)
 {
+#if 1
+  return FILE_INDEXER_NEEDS_UPDATE;
+#else
   AssetFile asset_file(file_name);
   AssetIndexFile asset_index_file(asset_file);
 
@@ -163,6 +209,7 @@ static eFileIndexerResult read_index(const char *file_name,
   *r_read_entries_len = contents->copy_into(*entries);
 
   return FILE_INDEXER_READ_FROM_INDEX;
+#endif
 }
 
 static void update_index(const char *file_name, FileIndexerEntries *entries)
@@ -182,6 +229,9 @@ constexpr FileIndexer asset_indexer()
   return indexer;
 }
 
-const FileIndexer file_indexer_asset = asset_indexer();
-
 }  // namespace blender::ed::asset
+
+extern "C" {
+
+const FileIndexer file_indexer_asset = blender::ed::asset::asset_indexer();
+}

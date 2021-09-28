@@ -27,6 +27,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_linklist.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_appdir.h"
@@ -43,6 +44,7 @@
 #include "WM_message.h"
 #include "WM_types.h"
 
+#include "ED_asset_indexer.h"
 #include "ED_fileselect.h"
 #include "ED_screen.h"
 #include "ED_space_api.h"
@@ -356,6 +358,9 @@ static void file_refresh(const bContext *C, ScrArea *area)
       params->filter_glob,
       params->filter_search);
 
+  if (ED_fileselect_is_asset_browser(sfile)) {
+    filelist_setindexer(sfile->files, &file_indexer_asset);
+  }
   /* Update the active indices of bookmarks & co. */
   sfile->systemnr = fsmenu_get_active_indices(fsmenu, FS_CATEGORY_SYSTEM, params->dir);
   sfile->system_bookmarknr = fsmenu_get_active_indices(
