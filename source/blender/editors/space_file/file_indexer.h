@@ -17,6 +17,8 @@
 /** \file
  * \ingroup edfile
  */
+#pragma once
+
 #include "ED_file_indexer.h"
 
 #ifdef __cplusplus
@@ -24,7 +26,6 @@ extern "C" {
 #endif
 
 extern FileIndexer file_indexer_default;
-
 
 #ifdef __cplusplus
 }

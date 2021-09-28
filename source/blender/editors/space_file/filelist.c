@@ -3087,7 +3087,7 @@ static int filelist_readjob_list_lib(const char *root,
             entries, group_datablock_infos, true, idcode, group_name);
         if (use_indexer) {
           ED_file_indexer_entries_extend_from_datablock_infos(
-              &indexer_entries, group_datablock_infos, idcode, group);
+              &indexer_entries, group_datablock_infos, idcode, group_name);
         }
         BLI_linklist_freeN(group_datablock_infos);
         datablock_len += group_datablock_len;

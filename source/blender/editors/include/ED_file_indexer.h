@@ -18,6 +18,8 @@
  * \ingroup edfile
  */
 
+#pragma once
+
 #include "BLO_readfile.h"
 
 #ifdef __cplusplus
