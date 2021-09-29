@@ -149,11 +149,14 @@ class ContainerValue : public Value {
 class ObjectValue : public ContainerValue<Vector<std::pair<std::string, std::shared_ptr<Value>>>,
                                           std::pair<std::string, std::shared_ptr<Value>>,
                                           eValueType::Object> {
+  using LookupValue = std::shared_ptr<Value>;
+  using Lookup = Map<std::string, LookupValue>;
+
  public:
   /** Return a lookup map to quickly lookup by key. */
-  const Map<std::string, std::shared_ptr<Value>> create_lookup() const
+  const Lookup create_lookup() const
   {
-    Map<std::string, std::shared_ptr<Value>> result;
+    Lookup result;
     for (const Item &item : elements()) {
       result.add_as(item.first, item.second);
     }
