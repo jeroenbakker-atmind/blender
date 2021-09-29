@@ -325,32 +325,50 @@ static eFileIndexerResult read_index(const char *file_name,
   }
 
   if (asset_index_file.is_older(asset_file)) {
+    CLOG_INFO(
+        &LOG,
+        3,
+        "Asset index file [%s] needs to be refreshed as it is older than the asset file [%s].",
+        asset_index_file.file_name.c_str(),
+        file_name);
     return FILE_INDEXER_NEEDS_UPDATE;
   }
 
   if (!asset_index_file.constains_entries()) {
+    CLOG_INFO(&LOG,
+              3,
+              "Asset file index is to small to contain any entries. [%s]",
+              asset_index_file.file_name.c_str());
     *r_read_entries_len = 0;
     return FILE_INDEXER_READ_FROM_INDEX;
   }
 
   std::optional<AssetIndex> contents = asset_index_file.read_contents();
   if (!contents.has_value()) {
+    CLOG_WARN(&LOG,
+              "Couldn't read/parse the contents of asset file index [%s].",
+              asset_index_file.file_name.c_str());
     return FILE_INDEXER_NEEDS_UPDATE;
   }
 
   if (!contents->is_latest_version()) {
+    CLOG_INFO(&LOG,
+              3,
+              "Asset file index is ignored due to version mismatch [%s].",
+              asset_index_file.file_name.c_str());
     return FILE_INDEXER_NEEDS_UPDATE;
   }
 
-  CLOG_INFO(&LOG, 1, "Read asset index for %s.", file_name);
-  *r_read_entries_len = contents->extract_into(*entries);
+  int read_entries_len = contents->extract_into(*entries);
+  CLOG_INFO(&LOG, 1, "Read %d entries from asset index for [%s].", read_entries_len, file_name);
+  *r_read_entries_len = read_entries_len;
 
   return FILE_INDEXER_READ_FROM_INDEX;
 }
 
 static void update_index(const char *file_name, FileIndexerEntries *entries)
 {
-  CLOG_INFO(&LOG, 1, "Update asset index for %s.", file_name);
+  CLOG_INFO(&LOG, 1, "Update asset index for [%s].", file_name);
 
   AssetFile asset_file(file_name);
   AssetIndexFile asset_index_file(asset_file);
