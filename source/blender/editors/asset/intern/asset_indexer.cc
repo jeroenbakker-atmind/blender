@@ -68,12 +68,11 @@ class AssetFile : public File {
   }
 };
 
-static void build_file_indexer_entry(blender::io::serialize::ObjectValue &result,
-                                     const FileIndexerEntry *indexer_entry)
+static void build_value_from_file_indexer_entry(blender::io::serialize::ObjectValue &result,
+                                                const FileIndexerEntry *indexer_entry)
 {
   const BLODataBlockInfo &datablock_info = indexer_entry->datablock_info;
   blender::io::serialize::ObjectValue::Items &attributes = result.elements();
-
   attributes.append_as(std::pair(std::string("name"),
                                  new blender::io::serialize::StringValue(datablock_info.name)));
   attributes.append_as(
@@ -112,48 +111,59 @@ static void build_file_indexer_entry(blender::io::serialize::ObjectValue &result
   /* TODO: asset_data.IDProperties */
 }
 
+static void build_value_from_file_indexer_entries(blender::io::serialize::ObjectValue &result,
+                                                  const FileIndexerEntries &indexer_entries)
+{
+
+  blender::io::serialize::ArrayValue *entries = new blender::io::serialize::ArrayValue();
+  blender::io::serialize::ArrayValue::Items &items = entries->elements();
+
+  for (LinkNode *ln = indexer_entries.entries; ln; ln = ln->next) {
+    const FileIndexerEntry *indexer_entry = static_cast<const FileIndexerEntry *>(ln->link);
+    /* TODO: We also get none asset types (Brushes/Workspaces), this seems like an implementation
+     * flaw. */
+    if (indexer_entry->datablock_info.asset_data == nullptr) {
+      continue;
+    }
+    blender::io::serialize::ObjectValue *entry_value = new blender::io::serialize::ObjectValue();
+    build_value_from_file_indexer_entry(*entry_value, indexer_entry);
+    items.append_as(entry_value);
+  }
+
+  /* When no entries to index, we should not store the entries attribute as this would make the
+   * size bigger than the MIN_FILE_SIZE_WITH_ENTRIES. */
+  if (items.is_empty()) {
+    delete entries;
+  }
+  else {
+    blender::io::serialize::ObjectValue::Items &attributes = result.elements();
+    attributes.append_as(std::pair(std::string("entries"), entries));
+  }
+}
+
 struct AssetIndex {
   const int LAST_VERSION = 1;
 
-  blender::io::serialize::ObjectValue data;
+  blender::io::serialize::Value *data;
 
   AssetIndex(const FileIndexerEntries &indexer_entries)
   {
-    blender::io::serialize::ObjectValue::Items &root_attributes = data.elements();
+    blender::io::serialize::ObjectValue *root = new blender::io::serialize::ObjectValue();
+    data = root;
+    blender::io::serialize::ObjectValue::Items &root_attributes = root->elements();
     root_attributes.append_as(
         std::pair(std::string("version"), new blender::io::serialize::IntValue(LAST_VERSION)));
 
-    if (indexer_entries.entries == nullptr) {
-      return;
-    }
-
-    blender::io::serialize::ArrayValue *entries = new blender::io::serialize::ArrayValue();
-    blender::io::serialize::ArrayValue::Items &items = entries->elements();
-
-    for (LinkNode *ln = indexer_entries.entries; ln; ln = ln->next) {
-      const FileIndexerEntry *indexer_entry = static_cast<const FileIndexerEntry *>(ln->link);
-      /* TODO: We also get none asset types (Brushes/Workspaces), this seems like an implementation
-       * flaw. */
-      if (indexer_entry->datablock_info.asset_data == nullptr) {
-        continue;
-      }
-      blender::io::serialize::ObjectValue *entry_value = new blender::io::serialize::ObjectValue();
-      build_file_indexer_entry(*entry_value, indexer_entry);
-      items.append_as(entry_value);
-    }
-
-    /* When no entries to index, we should not store the entries attribute as this would make the
-     * size bigger than the MIN_FILE_SIZE_WITH_ENTRIES. */
-    if (items.is_empty()) {
-      delete entries;
-    }
-    else {
-      root_attributes.append_as(std::pair(std::string("entries"), entries));
-    }
+    build_value_from_file_indexer_entries(*root, indexer_entries);
   }
 
-  AssetIndex(const blender::io::serialize::ObjectValue value) : data(value)
+  AssetIndex(blender::io::serialize::Value *value) : data(value)
   {
+  }
+
+  virtual ~AssetIndex()
+  {
+    delete data;
   }
 
   const bool is_latest_version() const
@@ -162,7 +172,7 @@ struct AssetIndex {
     return true;
   }
 
-  const int copy_into(FileIndexerEntries &indexer_entries) const
+  const int extract_into(FileIndexerEntries &indexer_entries) const
   {
     return 0;
   }
@@ -198,7 +208,7 @@ class AssetIndexFile : public File {
     blender::io::serialize::JsonFormatter formatter;
     std::ifstream is;
     is.open(file_name);
-    Value *result = formatter.deserialize(os);
+    blender::io::serialize::Value *result = formatter.deserialize(is);
     is.close();
 
     // TODO: deserialize. Perhaps make AssetIndex->data a pointer.
@@ -209,12 +219,12 @@ class AssetIndexFile : public File {
   void write_contents(AssetIndex &content)
   {
     blender::io::serialize::JsonFormatter formatter;
-#if DEBUG
+#ifdef DEBUG
     formatter.indentation_len = 2;
 #endif
     std::ofstream os;
     os.open(file_name, std::ios::out | std::ios::trunc);
-    formatter.serialize(os, content.data);
+    formatter.serialize(os, *content.data);
     os.close();
   }
 };
@@ -250,7 +260,7 @@ static eFileIndexerResult read_index(const char *file_name,
     return FILE_INDEXER_NEEDS_UPDATE;
   }
 
-  *r_read_entries_len = contents->copy_into(*entries);
+  *r_read_entries_len = contents->extract_into(*entries);
 
   return FILE_INDEXER_READ_FROM_INDEX;
 #endif
