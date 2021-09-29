@@ -143,6 +143,7 @@ static void build_value_from_file_indexer_entries(blender::io::serialize::Object
 
 struct AssetIndex {
   const int LAST_VERSION = 1;
+  const int UNKNOWN_VERSION = -1;
 
   blender::io::serialize::Value *data;
 
@@ -166,10 +167,21 @@ struct AssetIndex {
     delete data;
   }
 
+  const int get_version() const
+  {
+    const blender::io::serialize::ObjectValue *root = data->as_object_value();
+    const blender::io::serialize::ObjectValue::Lookup attributes = root->create_lookup();
+    const blender::io::serialize::ObjectValue::LookupValue *Item version_value =
+        attributes.lookup_ptr(std::string("version"));
+    if (version_value == nullptr) {
+      return UNKNOWN_VERSION;
+    }
+    return (*version_value)->get_int_value().get_value();
+  }
+
   const bool is_latest_version() const
   {
-    /* TODO: check actual version */
-    return true;
+    return get_version() == LAST_VERSION;
   }
 
   const int extract_into(FileIndexerEntries &indexer_entries) const
