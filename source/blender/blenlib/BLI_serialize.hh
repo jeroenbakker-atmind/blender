@@ -66,6 +66,7 @@ class Value {
   }
 
  public:
+  virtual ~Value() = default;
   const eValueType type() const
   {
     return _type;
