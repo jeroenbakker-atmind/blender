@@ -58,16 +58,3 @@ set(LIB
 )
 
 blender_add_lib(bf_editor_asset "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-
-#if(WITH_GTESTS)
-#  set(TEST_SRC
-#    intern/asset_indexer_test.cc
-#  )
-#  set(TEST_INC
-#    ../editors/include
-#  )
-#  include(GTestTesting)
-#  blender_add_test_lib(bf_editor_asset_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB}")
-#endif()
-
-

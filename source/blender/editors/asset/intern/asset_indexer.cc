@@ -317,10 +317,6 @@ static eFileIndexerResult read_index(const char *file_name,
                                      FileIndexerEntries *entries,
                                      int *r_read_entries_len)
 {
-#if 0
-/* During development we want to force rebuilding indexes. */
-  return FILE_INDEXER_NEEDS_UPDATE;
-#else
   AssetFile asset_file(file_name);
   AssetIndexFile asset_index_file(asset_file);
 
@@ -350,7 +346,6 @@ static eFileIndexerResult read_index(const char *file_name,
   *r_read_entries_len = contents->extract_into(*entries);
 
   return FILE_INDEXER_READ_FROM_INDEX;
-#endif
 }
 
 static void update_index(const char *file_name, FileIndexerEntries *entries)
