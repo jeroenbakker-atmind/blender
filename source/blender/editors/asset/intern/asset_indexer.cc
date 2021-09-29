@@ -29,8 +29,12 @@
 
 #include "DNA_asset_types.h"
 
+#include "CLG_log.h"
+
 #include <fstream>
 #include <optional>
+
+static CLG_LogRef LOG = {"ed.asset"};
 
 namespace blender::ed::asset {
 
@@ -68,8 +72,8 @@ class AssetFile : public File {
   }
 };
 
-static void build_value_from_file_indexer_entry(blender::io::serialize::ObjectValue &result,
-                                                const FileIndexerEntry *indexer_entry)
+static void init_value_from_file_indexer_entry(blender::io::serialize::ObjectValue &result,
+                                               const FileIndexerEntry *indexer_entry)
 {
   const BLODataBlockInfo &datablock_info = indexer_entry->datablock_info;
   blender::io::serialize::ObjectValue::Items &attributes = result.elements();
@@ -111,8 +115,8 @@ static void build_value_from_file_indexer_entry(blender::io::serialize::ObjectVa
   /* TODO: asset_data.IDProperties */
 }
 
-static void build_value_from_file_indexer_entries(blender::io::serialize::ObjectValue &result,
-                                                  const FileIndexerEntries &indexer_entries)
+static void init_value_from_file_indexer_entries(blender::io::serialize::ObjectValue &result,
+                                                 const FileIndexerEntries &indexer_entries)
 {
 
   blender::io::serialize::ArrayValue *entries = new blender::io::serialize::ArrayValue();
@@ -126,7 +130,7 @@ static void build_value_from_file_indexer_entries(blender::io::serialize::Object
       continue;
     }
     blender::io::serialize::ObjectValue *entry_value = new blender::io::serialize::ObjectValue();
-    build_value_from_file_indexer_entry(*entry_value, indexer_entry);
+    init_value_from_file_indexer_entry(*entry_value, indexer_entry);
     items.append_as(entry_value);
   }
 
@@ -139,6 +143,73 @@ static void build_value_from_file_indexer_entries(blender::io::serialize::Object
     blender::io::serialize::ObjectValue::Items &attributes = result.elements();
     attributes.append_as(std::pair(std::string("entries"), entries));
   }
+}
+
+static void init_indexer_entry_from_value(FileIndexerEntry &indexer_entry,
+                                          const blender::io::serialize::ObjectValue &value)
+{
+  blender::io::serialize::ObjectValue::Lookup lookup = value.create_lookup();
+  int idcode = lookup.lookup(std::string("idcode"))->as_int_value()->value();
+  indexer_entry.idcode = idcode;
+
+  const std::string &group_name =
+      lookup.lookup(std::string("group_name"))->as_string_value()->string_value();
+  BLI_strncpy(indexer_entry.group_name, group_name.c_str(), sizeof(indexer_entry.group_name));
+
+  const std::string &name = lookup.lookup(std::string("name"))->as_string_value()->string_value();
+  BLI_strncpy(
+      indexer_entry.datablock_info.name, name.c_str(), sizeof(indexer_entry.datablock_info.name));
+
+  AssetMetaData *asset_data = static_cast<AssetMetaData *>(
+      MEM_callocN(sizeof(AssetMetaData), __func__));
+  indexer_entry.datablock_info.asset_data = asset_data;
+
+  blender::io::serialize::ObjectValue::LookupValue *description_value = lookup.lookup_ptr(
+      std::string("description"));
+  if (description_value != nullptr) {
+    const std::string &description = (*description_value)->as_string_value()->string_value();
+    char *description_c_str = static_cast<char *>(MEM_mallocN(description.length() + 1, __func__));
+    BLI_strncpy(description_c_str, description.c_str(), description.length() + 1);
+    asset_data->description = description_c_str;
+  }
+
+  const std::string &catalog_name =
+      lookup.lookup(std::string("catalog_name"))->as_string_value()->string_value();
+  BLI_strncpy(asset_data->catalog_simple_name,
+              catalog_name.c_str(),
+              sizeof(asset_data->catalog_simple_name));
+
+  const std::string &catalog_id =
+      lookup.lookup(std::string("catalog_id"))->as_string_value()->string_value();
+  bUUID catalog_uuid(catalog_id);
+  asset_data->catalog_id = catalog_uuid;
+}
+
+static int init_indexer_entries_from_value(FileIndexerEntries &indexer_entries,
+                                           const blender::io::serialize::ObjectValue &value)
+{
+  int num_entries_read = 0;
+  const blender::io::serialize::ObjectValue::Lookup attributes = value.create_lookup();
+  const blender::io::serialize::ObjectValue::LookupValue *entries_value = attributes.lookup_ptr(
+      std::string("entries"));
+  BLI_assert(entries_value != nullptr);
+
+  if (entries_value == nullptr) {
+    return num_entries_read;
+  }
+
+  const blender::io::serialize::ArrayValue::Items elements =
+      (*entries_value)->as_array_value()->elements();
+  for (blender::io::serialize::ArrayValue::Item element : elements) {
+    const blender::io::serialize::ObjectValue *entry_value = element->as_object_value();
+    FileIndexerEntry *entry = static_cast<FileIndexerEntry *>(
+        MEM_callocN(sizeof(FileIndexerEntry), __func__));
+    init_indexer_entry_from_value(*entry, *entry_value);
+    BLI_linklist_prepend(&indexer_entries.entries, entry);
+    num_entries_read += 1;
+  }
+
+  return num_entries_read;
 }
 
 struct AssetIndex {
@@ -155,7 +226,7 @@ struct AssetIndex {
     root_attributes.append_as(
         std::pair(std::string("version"), new blender::io::serialize::IntValue(LAST_VERSION)));
 
-    build_value_from_file_indexer_entries(*root, indexer_entries);
+    init_value_from_file_indexer_entries(*root, indexer_entries);
   }
 
   AssetIndex(blender::io::serialize::Value *value) : data(value)
@@ -171,12 +242,12 @@ struct AssetIndex {
   {
     const blender::io::serialize::ObjectValue *root = data->as_object_value();
     const blender::io::serialize::ObjectValue::Lookup attributes = root->create_lookup();
-    const blender::io::serialize::ObjectValue::LookupValue *Item version_value =
-        attributes.lookup_ptr(std::string("version"));
+    const blender::io::serialize::ObjectValue::LookupValue *version_value = attributes.lookup_ptr(
+        std::string("version"));
     if (version_value == nullptr) {
       return UNKNOWN_VERSION;
     }
-    return (*version_value)->get_int_value().get_value();
+    return (*version_value)->as_int_value()->value();
   }
 
   const bool is_latest_version() const
@@ -186,7 +257,9 @@ struct AssetIndex {
 
   const int extract_into(FileIndexerEntries &indexer_entries) const
   {
-    return 0;
+    const blender::io::serialize::ObjectValue *root = data->as_object_value();
+    int num_entries_read = init_indexer_entries_from_value(indexer_entries, *root);
+    return num_entries_read;
   }
 };
 
@@ -212,7 +285,8 @@ class AssetIndexFile : public File {
   /* Check if the index file contains entries without opening the file. */
   const bool constains_entries() const
   {
-    return get_file_size() < MIN_FILE_SIZE_WITH_ENTRIES;
+    const size_t file_size = get_file_size();
+    return file_size > MIN_FILE_SIZE_WITH_ENTRIES;
   }
 
   std::optional<AssetIndex> read_contents() const
@@ -220,12 +294,10 @@ class AssetIndexFile : public File {
     blender::io::serialize::JsonFormatter formatter;
     std::ifstream is;
     is.open(file_name);
-    blender::io::serialize::Value *result = formatter.deserialize(is);
+    blender::io::serialize::Value *read_data = formatter.deserialize(is);
     is.close();
 
-    // TODO: deserialize. Perhaps make AssetIndex->data a pointer.
-
-    return std::nullopt;
+    return std::make_optional<AssetIndex>(read_data);
   }
 
   void write_contents(AssetIndex &content)
@@ -245,7 +317,8 @@ static eFileIndexerResult read_index(const char *file_name,
                                      FileIndexerEntries *entries,
                                      int *r_read_entries_len)
 {
-#if 1
+#if 0
+/* During development we want to force rebuilding indexes. */
   return FILE_INDEXER_NEEDS_UPDATE;
 #else
   AssetFile asset_file(file_name);
@@ -260,6 +333,7 @@ static eFileIndexerResult read_index(const char *file_name,
   }
 
   if (!asset_index_file.constains_entries()) {
+    *r_read_entries_len = 0;
     return FILE_INDEXER_READ_FROM_INDEX;
   }
 
@@ -272,6 +346,7 @@ static eFileIndexerResult read_index(const char *file_name,
     return FILE_INDEXER_NEEDS_UPDATE;
   }
 
+  CLOG_INFO(&LOG, 1, "Read asset index for %s.", file_name);
   *r_read_entries_len = contents->extract_into(*entries);
 
   return FILE_INDEXER_READ_FROM_INDEX;
@@ -280,6 +355,8 @@ static eFileIndexerResult read_index(const char *file_name,
 
 static void update_index(const char *file_name, FileIndexerEntries *entries)
 {
+  CLOG_INFO(&LOG, 1, "Update asset index for %s.", file_name);
+
   AssetFile asset_file(file_name);
   AssetIndexFile asset_index_file(asset_file);
 
