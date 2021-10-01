@@ -20,18 +20,22 @@
 
 #include "ED_asset_indexer.h"
 
+#include "DNA_asset_types.h"
+
 #include "BLI_fileops.h"
+#include "BLI_hash.hh"
 #include "BLI_linklist.h"
 #include "BLI_path_util.h"
 #include "BLI_serialize.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_uuid.h"
 
-#include "DNA_asset_types.h"
+#include "BKE_appdir.h"
 
 #include "CLG_log.h"
 
 #include <fstream>
+#include <iomanip>
 #include <optional>
 
 static CLG_LogRef LOG = {"ed.asset"};
@@ -60,14 +64,33 @@ class AssetFile : public File {
   {
   }
 
+  uint64_t hash()
+  {
+    DefaultHash<StringRefNull> hasher;
+    return hasher(file_name);
+  }
+
+  std::string hint()
+  {
+    char file_name[FILE_MAX];
+    BLI_split_file_part(get_file_path(), file_name, sizeof(file_name));
+    return std::string(file_name);
+  }
+
   std::string index_file_path()
   {
-    /* TODO: Should be stored in local machine cache. */
-    return file_name + ".index.json";
+    /* TODO: Should contain the asset library. */
+    /* TODO: Although `BKE_tempdir_base` is documented as persistent temp dir, it ain't! Expected
+     * it to return `/var/tmp/` on linux. */
+    std::stringstream ss;
+    ss << BKE_tempdir_base() << "blender-asset-library/" << std::setfill('0') << std::setw(16)
+       << std::hex << hash() << "_" << hint() << ".index.json";
+    return ss.str();
   }
 
   const char *get_file_path() const override
   {
+
     return file_name.c_str();
   }
 };
@@ -265,6 +288,8 @@ struct AssetIndex {
 
 class AssetIndexFile : public File {
  public:
+  /* Asset index files with a size smaller than this attribute would be considered to not contain
+   * any entries. */
   const size_t MIN_FILE_SIZE_WITH_ENTRIES = 32;
   std::string file_name;
 
@@ -300,12 +325,24 @@ class AssetIndexFile : public File {
     return std::make_optional<AssetIndex>(read_data);
   }
 
+  bool ensure_parent_path_exists() const
+  {
+    /* `BLI_make_existing_file` only ensures parent path, otherwise than expected from the name of
+     * the function. */
+    return BLI_make_existing_file(get_file_path());
+  }
+
   void write_contents(AssetIndex &content)
   {
     blender::io::serialize::JsonFormatter formatter;
 #ifdef DEBUG
     formatter.indentation_len = 2;
 #endif
+    if (!ensure_parent_path_exists()) {
+      CLOG_ERROR(&LOG, "Index not created: couldn't create folder [%s].", get_file_path());
+      return;
+    }
+
     std::ofstream os;
     os.open(file_name, std::ios::out | std::ios::trunc);
     formatter.serialize(os, *content.data);
@@ -368,10 +405,14 @@ static eFileIndexerResult read_index(const char *file_name,
 
 static void update_index(const char *file_name, FileIndexerEntries *entries)
 {
-  CLOG_INFO(&LOG, 1, "Update asset index for [%s].", file_name);
 
   AssetFile asset_file(file_name);
   AssetIndexFile asset_index_file(asset_file);
+  CLOG_INFO(&LOG,
+            1,
+            "Update asset index for [%s] store index in [%s].",
+            asset_file.get_file_path(),
+            asset_index_file.get_file_path());
 
   AssetIndex content(*entries);
   asset_index_file.write_contents(content);
