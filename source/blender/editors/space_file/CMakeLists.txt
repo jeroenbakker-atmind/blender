@@ -35,6 +35,7 @@ set(INC
 )
 
 set(SRC
+  asset_catalog_tree_view.cc
   file_draw.c
   file_indexer.cc
   file_ops.c
