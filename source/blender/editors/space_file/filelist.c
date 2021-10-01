@@ -400,7 +400,7 @@ typedef struct FileList {
   short sort;
 
   FileListFilter filter_data;
-  const FileIndexer *indexer;
+  struct FileIndexerInstance indexer;
 
   struct FileListIntern filelist_intern;
 
@@ -1095,7 +1095,7 @@ void filelist_setindexer(FileList *filelist, const FileIndexer *indexer)
   BLI_assert(filelist);
   BLI_assert(indexer);
 
-  filelist->indexer = indexer;
+  filelist->indexer.callbacks = indexer;
 }
 
 /**
@@ -1795,7 +1795,7 @@ FileList *filelist_new(short type)
   p->filelist.nbr_entries = FILEDIR_NBR_ENTRIES_UNSET;
   filelist_settype(p, type);
 
-  p->indexer = &file_indexer_default;
+  p->indexer.callbacks = &file_indexer_default;
 
   return p;
 }
@@ -3079,7 +3079,7 @@ static FileListInternEntry *filelist_readjob_list_lib_parent_entry_create(void)
 static int filelist_readjob_list_lib(const char *root,
                                      ListBase *entries,
                                      const ListLibOptions options,
-                                     const FileIndexer *indexer)
+                                     FileIndexerInstance *indexer)
 {
   BLI_assert(indexer);
 
@@ -3105,8 +3105,8 @@ static int filelist_readjob_list_lib(const char *root,
   FileIndexerEntries indexer_entries = {NULL};
   if (use_indexer) {
     int read_from_index = 0;
-    eFileIndexerResult indexer_result = indexer->read_index(
-        dir, &indexer_entries, &read_from_index);
+    eFileIndexerResult indexer_result = indexer->callbacks->read_index(
+        dir, &indexer_entries, &read_from_index, indexer->user_data);
     if (indexer_result == FILE_INDEXER_READ_FROM_INDEX) {
       /* Add current parent when requested. */
       if (options & LIST_LIB_ADD_PARENT) {
@@ -3178,7 +3178,7 @@ static int filelist_readjob_list_lib(const char *root,
 
   /* Update the index. */
   if (use_indexer) {
-    indexer->update_index(dir, &indexer_entries);
+    indexer->callbacks->update_index(dir, &indexer_entries, indexer->user_data);
     ED_file_indexer_entries_clear(&indexer_entries);
   }
 
@@ -3442,6 +3442,12 @@ static void filelist_readjob_do(const bool do_lib,
   BLI_path_normalize_dir(job_params->main_name, dir);
   td_dir->dir = BLI_strdup(dir);
 
+  /* Init the file indexer. */
+  if (filelist->indexer.callbacks->init_user_data) {
+    filelist->indexer.user_data = filelist->indexer.callbacks->init_user_data(
+        filelist->asset_library_ref);
+  }
+
   while (!BLI_stack_is_empty(todo_dirs) && !(*stop)) {
     FileListInternEntry *entry;
     int nbr_entries = 0;
@@ -3485,7 +3491,7 @@ static void filelist_readjob_do(const bool do_lib,
         list_lib_options |= LIST_LIB_ASSETS_ONLY;
       }
       nbr_entries = filelist_readjob_list_lib(
-          subdir, &entries, list_lib_options, filelist->indexer);
+          subdir, &entries, list_lib_options, &filelist->indexer);
       if (nbr_entries > 0) {
         is_lib = true;
       }
@@ -3533,6 +3539,15 @@ static void filelist_readjob_do(const bool do_lib,
     nbr_done_dirs++;
     *progress = (float)nbr_done_dirs / (float)nbr_todo_dirs;
     MEM_freeN(subdir);
+  }
+
+  /* Finalize and free indexer. */
+  if (filelist->indexer.callbacks->filelist_finished && BLI_stack_is_empty(todo_dirs)) {
+    filelist->indexer.callbacks->filelist_finished(filelist->indexer.user_data);
+  }
+  if (filelist->indexer.callbacks->free_user_data && filelist->indexer.user_data) {
+    filelist->indexer.callbacks->free_user_data(filelist->indexer.user_data);
+    filelist->indexer.user_data = NULL;
   }
 
   /* If we were interrupted by stop, stack may not be empty and we need to free
@@ -3589,6 +3604,10 @@ static void filelist_readjob_load_asset_library_data(FileListReadJob *job_params
     /* Load asset catalogs, into the temp filelist for thread-safety.
      * #filelist_readjob_endjob() will move it into the real filelist. */
     tmp_filelist->asset_library = BKE_asset_library_load(library_root_path);
+    /* AssetLibraryIndexing needs the reference to generate the correct name for the index folder.
+     * See `AssetLibraryIndex`. As both instances are freed we need duplicate the instance.
+     * TODO(jbakker): We should consider copying the struct in stead of using pointers. */
+    tmp_filelist->asset_library_ref = MEM_dupallocN(job_params->filelist->asset_library_ref);
     *do_update = true;
   }
 }

@@ -26,6 +26,7 @@
 extern "C" {
 #endif
 
+struct AssetLibraryReference;
 struct LinkNode;
 
 typedef enum eFileIndexerResult {
@@ -44,15 +45,33 @@ typedef struct FileIndexerEntries {
   struct LinkNode /* FileIndexerEntry */ *entries;
 } FileIndexerEntries;
 
+typedef void *(*FileIndexerInitUserDataFunc)(const AssetLibraryReference *library_reference);
+typedef void (*FileIndexerFreeUserDataFunc)(void *);
+typedef void (*FileIndexerFinishedFunc)(void *);
 typedef eFileIndexerResult (*FileIndexerReadIndexFunc)(const char *file_name,
                                                        FileIndexerEntries *entries,
-                                                       int *r_read_entries_len);
-typedef void (*FileIndexerUpdateIndexFunc)(const char *file_name, FileIndexerEntries *entries);
+                                                       int *r_read_entries_len,
+                                                       void *user_data);
+typedef void (*FileIndexerUpdateIndexFunc)(const char *file_name,
+                                           FileIndexerEntries *entries,
+                                           void *user_data);
 
 typedef struct FileIndexer {
+  /* Optional callback */
+  FileIndexerInitUserDataFunc init_user_data;
+  /* Optional callback */
+  FileIndexerFreeUserDataFunc free_user_data;
+  /* Optional callback. Called when listing files completed. */
+  FileIndexerFinishedFunc filelist_finished;
+
   FileIndexerReadIndexFunc read_index;
   FileIndexerUpdateIndexFunc update_index;
 } FileIndexer;
+
+typedef struct FileIndexerInstance {
+  const FileIndexer *callbacks;
+  void *user_data;
+} FileIndexerInstance;
 
 /* file_indexer.cc */
 void ED_file_indexer_entries_clear(FileIndexerEntries *indexer_entries);

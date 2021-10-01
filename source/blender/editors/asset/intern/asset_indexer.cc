@@ -21,16 +21,19 @@
 #include "ED_asset_indexer.h"
 
 #include "DNA_asset_types.h"
+#include "DNA_userdef_types.h"
 
 #include "BLI_fileops.h"
 #include "BLI_hash.hh"
 #include "BLI_linklist.h"
 #include "BLI_path_util.h"
 #include "BLI_serialize.hh"
+#include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_uuid.h"
 
 #include "BKE_appdir.h"
+#include "BKE_preferences.h"
 
 #include "CLG_log.h"
 
@@ -56,6 +59,7 @@ class File {
     return BLI_file_size(get_file_path());
   }
 };
+
 class AssetFile : public File {
  public:
   StringRefNull file_name;
@@ -64,28 +68,17 @@ class AssetFile : public File {
   {
   }
 
-  uint64_t hash()
+  uint64_t hash() const
   {
     DefaultHash<StringRefNull> hasher;
     return hasher(file_name);
   }
 
-  std::string hint()
+  std::string get_name() const
   {
     char file_name[FILE_MAX];
     BLI_split_file_part(get_file_path(), file_name, sizeof(file_name));
     return std::string(file_name);
-  }
-
-  std::string index_file_path()
-  {
-    /* TODO: Should contain the asset library. */
-    /* TODO: Although `BKE_tempdir_base` is documented as persistent temp dir, it ain't! Expected
-     * it to return `/var/tmp/` on linux. */
-    std::stringstream ss;
-    ss << BKE_tempdir_base() << "blender-asset-library/" << std::setfill('0') << std::setw(16)
-       << std::hex << hash() << "_" << hint() << ".index.json";
-    return ss.str();
   }
 
   const char *get_file_path() const override
@@ -349,6 +342,88 @@ static int init_indexer_entries_from_value(FileIndexerEntries &indexer_entries,
   return num_entries_read;
 }
 
+struct AssetLibraryIndex {
+  bUserAssetLibrary *library;
+  Set<std::string> unused_file_indexes;
+
+ public:
+  AssetLibraryIndex(const AssetLibraryReference *library_ref)
+  {
+    library = BKE_preferences_asset_library_find_from_index(&U, library_ref->custom_library_index);
+  }
+
+  const StringRefNull get_name() const
+  {
+    return StringRefNull(library->name);
+  }
+
+  uint64_t hash() const
+  {
+    DefaultHash<StringRefNull> hasher;
+    return hasher(get_library_file_path());
+  }
+
+  const StringRefNull get_library_file_path() const
+  {
+    return StringRefNull(library->path);
+  }
+
+  std::string get_index_path() const
+  {
+    std::stringstream ss;
+    ss << BKE_tempdir_base() << "blender-asset-library/";
+    ss << std::setfill('0') << std::setw(16) << std::hex << hash() << "_" << get_name() << "/";
+    return ss.str();
+  }
+
+  std::string index_file_path(const AssetFile &asset_file) const
+  {
+    /* TODO: Although `BKE_tempdir_base` is documented as persistent temp dir, it ain't! Expected
+     * it to return `/var/tmp/` on linux. */
+    std::stringstream ss;
+    ss << get_index_path();
+    ss << std::setfill('0') << std::setw(16) << std::hex << asset_file.hash() << "_"
+       << asset_file.get_name() << ".index.json";
+    return ss.str();
+  }
+
+  void init_unused_index_files()
+  {
+    std::string index_path = get_index_path();
+    if (!BLI_exists(index_path.c_str()) || !BLI_is_dir(index_path.c_str())) {
+      return;
+    }
+    struct direntry *dir_entries = nullptr;
+    int num_entries = BLI_filelist_dir_contents(index_path.c_str(), &dir_entries);
+    for (int i = 0; i < num_entries; i++) {
+      struct direntry *entry = &dir_entries[i];
+      if (BLI_str_endswith(entry->relname, ".index.json")) {
+        unused_file_indexes.add_as(std::string(entry->path));
+      }
+    }
+
+    BLI_filelist_free(dir_entries, num_entries);
+  }
+
+  void mark_used(std::string &file_name)
+  {
+    unused_file_indexes.remove(file_name);
+  }
+
+  int remove_unused_index_files() const
+  {
+    int num_files_deleted = 0;
+    for (const std::string &unused_index : unused_file_indexes) {
+      const char *file_path = unused_index.c_str();
+      CLOG_INFO(&LOG, 2, "Remove unused index file [%s].", file_path);
+      BLI_delete(file_path, false, false);
+      num_files_deleted++;
+    }
+
+    return num_files_deleted;
+  }
+};
+
 struct AssetIndex {
   const int LAST_VERSION = 1;
   const int UNKNOWN_VERSION = -1;
@@ -402,13 +477,20 @@ struct AssetIndex {
 
 class AssetIndexFile : public File {
  public:
+  AssetLibraryIndex &library_index;
   /* Asset index files with a size smaller than this attribute would be considered to not contain
    * any entries. */
   const size_t MIN_FILE_SIZE_WITH_ENTRIES = 32;
   std::string file_name;
 
-  AssetIndexFile(AssetFile &asset_file_name) : file_name(asset_file_name.index_file_path())
+  AssetIndexFile(AssetLibraryIndex &library_index, AssetFile &asset_file_name)
+      : library_index(library_index), file_name(library_index.index_file_path(asset_file_name))
   {
+  }
+
+  void mark_used()
+  {
+    library_index.mark_used(file_name);
   }
 
   const char *get_file_path() const override
@@ -466,14 +548,21 @@ class AssetIndexFile : public File {
 
 static eFileIndexerResult read_index(const char *file_name,
                                      FileIndexerEntries *entries,
-                                     int *r_read_entries_len)
+                                     int *r_read_entries_len,
+                                     void *user_data)
 {
+  AssetLibraryIndex &library_index = *static_cast<AssetLibraryIndex *>(user_data);
   AssetFile asset_file(file_name);
-  AssetIndexFile asset_index_file(asset_file);
+  AssetIndexFile asset_index_file(library_index, asset_file);
 
   if (!asset_index_file.exists()) {
     return FILE_INDEXER_NEEDS_UPDATE;
   }
+
+  /* Mark index to be used. Even when the index will be recreated it should still mark the index as
+   * used. When not done it would remove the index when the indexing has finished (see
+   * `AssetLibraryIndex.remove_unused_index_files`) .*/
+  asset_index_file.mark_used();
 
   if (asset_index_file.is_older(asset_file)) {
     CLOG_INFO(
@@ -517,11 +606,11 @@ static eFileIndexerResult read_index(const char *file_name,
   return FILE_INDEXER_READ_FROM_INDEX;
 }
 
-static void update_index(const char *file_name, FileIndexerEntries *entries)
+static void update_index(const char *file_name, FileIndexerEntries *entries, void *user_data)
 {
-
+  AssetLibraryIndex &library_index = *static_cast<AssetLibraryIndex *>(user_data);
   AssetFile asset_file(file_name);
-  AssetIndexFile asset_index_file(asset_file);
+  AssetIndexFile asset_index_file(library_index, asset_file);
   CLOG_INFO(&LOG,
             1,
             "Update asset index for [%s] store index in [%s].",
@@ -532,11 +621,36 @@ static void update_index(const char *file_name, FileIndexerEntries *entries)
   asset_index_file.write_contents(content);
 }
 
+static void *init_user_data(const AssetLibraryReference *library_reference)
+{
+  AssetLibraryIndex *library_index = new AssetLibraryIndex(library_reference);
+  library_index->init_unused_index_files();
+  return library_index;
+}
+
+static void free_user_data(void *user_data)
+{
+  AssetLibraryIndex *index = static_cast<AssetLibraryIndex *>(user_data);
+  delete (index);
+}
+
+static void filelist_finished(void *user_data)
+{
+  AssetLibraryIndex &library_index = *static_cast<AssetLibraryIndex *>(user_data);
+  int num_indexes_removed = library_index.remove_unused_index_files();
+  if (num_indexes_removed > 0) {
+    CLOG_INFO(&LOG, 1, "Removed %d unused indexes.", num_indexes_removed);
+  }
+}
+
 constexpr FileIndexer asset_indexer()
 {
   FileIndexer indexer = {nullptr};
   indexer.read_index = read_index;
   indexer.update_index = update_index;
+  indexer.init_user_data = init_user_data;
+  indexer.free_user_data = free_user_data;
+  indexer.filelist_finished = filelist_finished;
   return indexer;
 }
 
