@@ -105,44 +105,131 @@ constexpr StringRef ATTRIBUTE_ENTRIES_CATALOG_NAME = StringRef("catalog_name");
 constexpr StringRef ATTRIBUTE_ENTRIES_DESCRIPTION = StringRef("description");
 constexpr StringRef ATTRIBUTE_ENTRIES_TAGS = StringRef("tags");
 
-static void init_value_from_file_indexer_entry(blender::io::serialize::ObjectValue &result,
-                                               const FileIndexerEntry *indexer_entry)
-{
-  const BLODataBlockInfo &datablock_info = indexer_entry->datablock_info;
-  blender::io::serialize::ObjectValue::Items &attributes = result.elements();
-  attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_NAME,
-                                 new blender::io::serialize::StringValue(datablock_info.name)));
-  attributes.append_as(
-      std::pair(std::string(ATTRIBUTE_ENTRIES_GROUP_NAME),
-                new blender::io::serialize::StringValue(indexer_entry->group_name)));
-  attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_IDCODE,
-                                 new blender::io::serialize::IntValue(indexer_entry->idcode)));
+struct AssetEntryReader {
+ private:
+  blender::io::serialize::ObjectValue::Lookup lookup;
 
-  const AssetMetaData &asset_data = *datablock_info.asset_data;
-
-  char catalog_id[UUID_STRING_LEN];
-  BLI_uuid_format(catalog_id, asset_data.catalog_id);
-  attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_CATALOG_ID,
-                                 new blender::io::serialize::StringValue(catalog_id)));
-
-  attributes.append_as(
-      std::pair(ATTRIBUTE_ENTRIES_CATALOG_NAME,
-                new blender::io::serialize::StringValue(asset_data.catalog_simple_name)));
-
-  if (asset_data.description != nullptr) {
-    attributes.append_as(
-        std::pair(ATTRIBUTE_ENTRIES_DESCRIPTION,
-                  new blender::io::serialize::StringValue(asset_data.description)));
+ public:
+  AssetEntryReader(const blender::io::serialize::ObjectValue &entry)
+      : lookup(entry.create_lookup())
+  {
   }
 
-  if (!BLI_listbase_is_empty(&asset_data.tags)) {
+  const int get_idcode() const
+  {
+    return lookup.lookup(ATTRIBUTE_ENTRIES_IDCODE)->as_int_value()->value();
+  }
+
+  const std::string &get_group_name() const
+  {
+    return lookup.lookup(ATTRIBUTE_ENTRIES_GROUP_NAME)->as_string_value()->string_value();
+  }
+
+  const std::string &get_name() const
+  {
+    return lookup.lookup(ATTRIBUTE_ENTRIES_NAME)->as_string_value()->string_value();
+  }
+
+  const bool has_description() const
+  {
+    return lookup.contains(ATTRIBUTE_ENTRIES_DESCRIPTION);
+  }
+
+  const std::string &get_description() const
+  {
+    return lookup.lookup(ATTRIBUTE_ENTRIES_DESCRIPTION)->as_string_value()->string_value();
+  }
+
+  const std::string &get_catalog_name() const
+  {
+    return lookup.lookup(ATTRIBUTE_ENTRIES_CATALOG_NAME)->as_string_value()->string_value();
+  }
+
+  const bUUID get_catalog_id() const
+  {
+    const std::string &catalog_id =
+        lookup.lookup(ATTRIBUTE_ENTRIES_CATALOG_ID)->as_string_value()->string_value();
+    bUUID catalog_uuid(catalog_id);
+    return catalog_uuid;
+  }
+};
+
+struct AssetEntryWriter {
+ private:
+  blender::io::serialize::ObjectValue::Items &attributes;
+
+ public:
+  AssetEntryWriter(blender::io::serialize::ObjectValue &entry) : attributes(entry.elements())
+  {
+  }
+
+  void add_idcode(int idcode)
+  {
+    attributes.append_as(
+        std::pair(ATTRIBUTE_ENTRIES_IDCODE, new blender::io::serialize::IntValue(idcode)));
+  }
+  void add_name(const StringRefNull name)
+  {
+    attributes.append_as(
+        std::pair(ATTRIBUTE_ENTRIES_NAME, new blender::io::serialize::StringValue(name)));
+  }
+  void add_group_name(const StringRefNull group_name)
+  {
+    attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_GROUP_NAME,
+                                   new blender::io::serialize::StringValue(group_name)));
+  }
+
+  void add_catalog_id(const bUUID &catalog_id)
+  {
+    char catalog_id_str[UUID_STRING_LEN];
+    BLI_uuid_format(catalog_id_str, catalog_id);
+    attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_CATALOG_ID,
+                                   new blender::io::serialize::StringValue(catalog_id_str)));
+  }
+
+  void add_catalog_name(const StringRefNull catalog_name)
+  {
+    attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_CATALOG_NAME,
+                                   new blender::io::serialize::StringValue(catalog_name)));
+  }
+
+  void add_description(const StringRefNull description)
+  {
+    attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_DESCRIPTION,
+                                   new blender::io::serialize::StringValue(description)));
+  }
+
+  void add_tags(const ListBase /* AssetTag */ *asset_tags)
+  {
     blender::io::serialize::ArrayValue *tags = new blender::io::serialize::ArrayValue();
     attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_TAGS, tags));
     blender::io::serialize::ArrayValue::Items &tag_items = tags->elements();
 
-    LISTBASE_FOREACH (AssetTag *, tag, &asset_data.tags) {
+    LISTBASE_FOREACH (AssetTag *, tag, asset_tags) {
       tag_items.append_as(new blender::io::serialize::StringValue(tag->name));
     }
+  }
+};
+
+static void init_value_from_file_indexer_entry(AssetEntryWriter &result,
+                                               const FileIndexerEntry *indexer_entry)
+{
+  const BLODataBlockInfo &datablock_info = indexer_entry->datablock_info;
+
+  result.add_name(datablock_info.name);
+  result.add_group_name(indexer_entry->group_name);
+  result.add_idcode(indexer_entry->idcode);
+
+  const AssetMetaData &asset_data = *datablock_info.asset_data;
+  result.add_catalog_id(asset_data.catalog_id);
+  result.add_catalog_name(asset_data.catalog_simple_name);
+
+  if (asset_data.description != nullptr) {
+    result.add_description(asset_data.description);
+  }
+
+  if (!BLI_listbase_is_empty(&asset_data.tags)) {
+    result.add_tags(&asset_data.tags);
   }
 
   /* TODO: asset_data.IDProperties */
@@ -163,7 +250,8 @@ static void init_value_from_file_indexer_entries(blender::io::serialize::ObjectV
       continue;
     }
     blender::io::serialize::ObjectValue *entry_value = new blender::io::serialize::ObjectValue();
-    init_value_from_file_indexer_entry(*entry_value, indexer_entry);
+    AssetEntryWriter entry(*entry_value);
+    init_value_from_file_indexer_entry(entry, indexer_entry);
     items.append_as(entry_value);
   }
 
@@ -179,18 +267,14 @@ static void init_value_from_file_indexer_entries(blender::io::serialize::ObjectV
 }
 
 static void init_indexer_entry_from_value(FileIndexerEntry &indexer_entry,
-                                          const blender::io::serialize::ObjectValue &value)
+                                          const AssetEntryReader &entry)
 {
-  blender::io::serialize::ObjectValue::Lookup lookup = value.create_lookup();
-  int idcode = lookup.lookup(ATTRIBUTE_ENTRIES_IDCODE)->as_int_value()->value();
-  indexer_entry.idcode = idcode;
+  indexer_entry.idcode = entry.get_idcode();
 
-  const std::string &group_name =
-      lookup.lookup(ATTRIBUTE_ENTRIES_GROUP_NAME)->as_string_value()->string_value();
+  const std::string &group_name = entry.get_group_name();
   BLI_strncpy(indexer_entry.group_name, group_name.c_str(), sizeof(indexer_entry.group_name));
 
-  const std::string &name =
-      lookup.lookup(ATTRIBUTE_ENTRIES_NAME)->as_string_value()->string_value();
+  const std::string &name = entry.get_name();
   BLI_strncpy(
       indexer_entry.datablock_info.name, name.c_str(), sizeof(indexer_entry.datablock_info.name));
 
@@ -198,25 +282,22 @@ static void init_indexer_entry_from_value(FileIndexerEntry &indexer_entry,
       MEM_callocN(sizeof(AssetMetaData), __func__));
   indexer_entry.datablock_info.asset_data = asset_data;
 
-  blender::io::serialize::ObjectValue::LookupValue *description_value = lookup.lookup_ptr(
-      ATTRIBUTE_ENTRIES_DESCRIPTION);
-  if (description_value != nullptr) {
-    const std::string &description = (*description_value)->as_string_value()->string_value();
+  if (entry.has_description()) {
+    const std::string &description = entry.get_description();
     char *description_c_str = static_cast<char *>(MEM_mallocN(description.length() + 1, __func__));
     BLI_strncpy(description_c_str, description.c_str(), description.length() + 1);
     asset_data->description = description_c_str;
   }
 
-  const std::string &catalog_name =
-      lookup.lookup(ATTRIBUTE_ENTRIES_CATALOG_NAME)->as_string_value()->string_value();
+  const std::string &catalog_name = entry.get_catalog_name();
   BLI_strncpy(asset_data->catalog_simple_name,
               catalog_name.c_str(),
               sizeof(asset_data->catalog_simple_name));
 
-  const std::string &catalog_id =
-      lookup.lookup(ATTRIBUTE_ENTRIES_CATALOG_ID)->as_string_value()->string_value();
-  bUUID catalog_uuid(catalog_id);
+  bUUID catalog_uuid = entry.get_catalog_id();
   asset_data->catalog_id = catalog_uuid;
+
+  /* TODO: Tags + ID properties. */
 }
 
 static int init_indexer_entries_from_value(FileIndexerEntries &indexer_entries,
@@ -235,10 +316,12 @@ static int init_indexer_entries_from_value(FileIndexerEntries &indexer_entries,
   const blender::io::serialize::ArrayValue::Items elements =
       (*entries_value)->as_array_value()->elements();
   for (blender::io::serialize::ArrayValue::Item element : elements) {
-    const blender::io::serialize::ObjectValue *entry_value = element->as_object_value();
+    const AssetEntryReader asset_entry(*element->as_object_value());
+
     FileIndexerEntry *entry = static_cast<FileIndexerEntry *>(
         MEM_callocN(sizeof(FileIndexerEntry), __func__));
-    init_indexer_entry_from_value(*entry, *entry_value);
+    init_indexer_entry_from_value(*entry, asset_entry);
+
     BLI_linklist_prepend(&indexer_entries.entries, entry);
     num_entries_read += 1;
   }
