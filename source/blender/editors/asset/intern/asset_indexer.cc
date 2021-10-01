@@ -152,6 +152,24 @@ struct AssetEntryReader {
     bUUID catalog_uuid(catalog_id);
     return catalog_uuid;
   }
+
+  const void get_tags(ListBase *tags) const
+  {
+    const blender::io::serialize::ObjectValue::LookupValue *value = lookup.lookup_ptr(
+        ATTRIBUTE_ENTRIES_TAGS);
+    if (value == nullptr) {
+      return;
+    }
+
+    const blender::io::serialize::ArrayValue *array_value = (*value)->as_array_value();
+    const blender::io::serialize::ArrayValue::Items &elements = array_value->elements();
+    for (const blender::io::serialize::ArrayValue::Item &item : elements) {
+      const std::string tag_name = item->as_string_value()->string_value();
+      AssetTag *tag = static_cast<AssetTag *>(MEM_callocN(sizeof(AssetTag), __func__));
+      BLI_strncpy(tag->name, tag_name.c_str(), sizeof(tag->name));
+      BLI_addtail(tags, tag);
+    }
+  }
 };
 
 struct AssetEntryWriter {
@@ -297,7 +315,9 @@ static void init_indexer_entry_from_value(FileIndexerEntry &indexer_entry,
   bUUID catalog_uuid = entry.get_catalog_id();
   asset_data->catalog_id = catalog_uuid;
 
-  /* TODO: Tags + ID properties. */
+  entry.get_tags(&asset_data->tags);
+
+  /* TODO: ID properties. */
 }
 
 static int init_indexer_entries_from_value(FileIndexerEntries &indexer_entries,
