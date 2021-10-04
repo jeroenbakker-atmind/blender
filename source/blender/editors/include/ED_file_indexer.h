@@ -66,11 +66,6 @@ typedef struct FileIndexer {
   FileIndexerUpdateIndexFunc update_index;
 } FileIndexer;
 
-typedef struct FileIndexerInstance {
-  const FileIndexer *callbacks;
-  void *user_data;
-} FileIndexerInstance;
-
 /* file_indexer.cc */
 void ED_file_indexer_entries_clear(FileIndexerEntries *indexer_entries);
 void ED_file_indexer_entries_extend_from_datablock_infos(

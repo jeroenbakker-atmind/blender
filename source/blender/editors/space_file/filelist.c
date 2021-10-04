@@ -386,6 +386,11 @@ enum {
   FLF_ASSETS_ONLY = 1 << 4,
 };
 
+typedef struct FileIndexerInstance {
+  const FileIndexer *callbacks;
+  void *user_data;
+} FileIndexerInstance;
+
 struct FileListReadJob;
 typedef struct FileList {
   FileDirEntryArr filelist;
