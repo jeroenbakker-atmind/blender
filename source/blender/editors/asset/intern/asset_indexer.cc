@@ -33,7 +33,7 @@
 #include "BLI_uuid.h"
 
 #include "BKE_appdir.h"
-#include "BKE_idtype.h"
+//#include "BKE_idtype.h"
 #include "BKE_preferences.h"
 
 #include "CLG_log.h"
@@ -135,11 +135,6 @@ struct AssetEntryReader {
   {
     const std::string &name_with_idcode = get_name_with_idcode();
     return GS(name_with_idcode.c_str());
-  }
-
-  const StringRefNull get_group_name() const
-  {
-    return BKE_idtype_idcode_to_name(get_idcode());
   }
 
   const StringRef get_name() const
@@ -300,9 +295,6 @@ static void init_indexer_entry_from_value(FileIndexerEntry &indexer_entry,
                                           const AssetEntryReader &entry)
 {
   indexer_entry.idcode = entry.get_idcode();
-
-  const std::string &group_name = entry.get_group_name();
-  BLI_strncpy(indexer_entry.group_name, group_name.c_str(), sizeof(indexer_entry.group_name));
 
   const std::string &name = entry.get_name();
   BLI_strncpy(

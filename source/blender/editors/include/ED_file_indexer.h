@@ -36,8 +36,6 @@ typedef enum eFileIndexerResult {
 
 typedef struct FileIndexerEntry {
   struct BLODataBlockInfo datablock_info;
-  /* TODO(jbakker): de-devil this... */
-  char group_name[666];
   short idcode;
 } FileIndexerEntry;
 
@@ -78,8 +76,7 @@ void ED_file_indexer_entries_clear(FileIndexerEntries *indexer_entries);
 void ED_file_indexer_entries_extend_from_datablock_infos(
     FileIndexerEntries *indexer_entries,
     const LinkNode * /* BLODataBlockInfo */ datablock_infos,
-    const int idcode,
-    const char *group);
+    const int idcode);
 
 #ifdef __cplusplus
 }

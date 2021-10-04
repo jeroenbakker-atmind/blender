@@ -3059,11 +3059,12 @@ static void filelist_readjob_list_lib_add_indexer_entries(
 {
   for (const LinkNode *ln = indexer_entries->entries; ln; ln = ln->next) {
     const FileIndexerEntry *indexer_entry = (const FileIndexerEntry *)ln->link;
+    const char *group_name = BKE_idtype_idcode_to_name(indexer_entry->idcode);
     filelist_readjob_list_lib_add_datablock(entries,
                                             &indexer_entry->datablock_info,
                                             prefix_relpath_with_group_name,
                                             indexer_entry->idcode,
-                                            indexer_entry->group_name);
+                                            group_name);
   }
 }
 
@@ -3163,7 +3164,7 @@ static int filelist_readjob_list_lib(const char *root,
             entries, group_datablock_infos, true, idcode, group_name);
         if (use_indexer) {
           ED_file_indexer_entries_extend_from_datablock_infos(
-              &indexer_entries, group_datablock_infos, idcode, group_name);
+              &indexer_entries, group_datablock_infos, idcode);
         }
         BLI_linklist_freeN(group_datablock_infos);
         datablock_len += group_datablock_len;

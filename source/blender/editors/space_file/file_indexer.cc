@@ -55,13 +55,12 @@ constexpr FileIndexer default_indexer()
 }
 
 static FileIndexerEntry *file_indexer_entry_create_from_datablock_info(
-    const BLODataBlockInfo *datablock_info, const int idcode, const char *group)
+    const BLODataBlockInfo *datablock_info, const int idcode)
 {
   FileIndexerEntry *entry = static_cast<FileIndexerEntry *>(
       MEM_mallocN(sizeof(FileIndexerEntry), __func__));
   entry->datablock_info = *datablock_info;
   entry->idcode = idcode;
-  BLI_strncpy(entry->group_name, group, sizeof(entry->group_name));
   return entry;
 }
 
@@ -72,14 +71,13 @@ extern "C" {
 void ED_file_indexer_entries_extend_from_datablock_infos(
     FileIndexerEntries *indexer_entries,
     const LinkNode * /* BLODataBlockInfo */ datablock_infos,
-    const int idcode,
-    const char *group)
+    const int idcode)
 {
   for (const LinkNode *ln = datablock_infos; ln; ln = ln->next) {
     const BLODataBlockInfo *datablock_info = static_cast<const BLODataBlockInfo *>(ln->link);
     FileIndexerEntry *file_indexer_entry =
-        blender::ed::file::indexer::file_indexer_entry_create_from_datablock_info(
-            datablock_info, idcode, group);
+        blender::ed::file::indexer::file_indexer_entry_create_from_datablock_info(datablock_info,
+                                                                                  idcode);
     BLI_linklist_prepend(&indexer_entries->entries, file_indexer_entry);
   }
 }
