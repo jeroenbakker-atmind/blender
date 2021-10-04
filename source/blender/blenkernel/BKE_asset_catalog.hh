@@ -26,6 +26,7 @@
 
 #include "BLI_function_ref.hh"
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_uuid.h"
 #include "BLI_vector.hh"
@@ -48,6 +49,7 @@ using CatalogFilePath = std::string;
 class AssetCatalog;
 class AssetCatalogDefinitionFile;
 class AssetCatalogTree;
+class AssetCatalogFilter;
 
 /* Manages the asset catalogs of a single asset library (i.e. of catalogs defined in a single
  * directory hierarchy). */
@@ -94,11 +96,19 @@ class AssetCatalogService {
   void merge_from_disk_before_writing();
 
   /** Return catalog with the given ID. Return nullptr if not found. */
-  AssetCatalog *find_catalog(CatalogID catalog_id);
+  AssetCatalog *find_catalog(CatalogID catalog_id) const;
 
   /** Return first catalog with the given path. Return nullptr if not found. This is not an
    * efficient call as it's just a linear search over the catalogs. */
   AssetCatalog *find_catalog_by_path(const AssetCatalogPath &path) const;
+
+  /**
+   * Create a filter object that can be used to determine whether an asset belongs to the given
+   * catalog, or any of the catalogs in the sub-tree rooted at the given catalog.
+   *
+   * \see #AssetCatalogFilter
+   */
+  AssetCatalogFilter create_catalog_filter(CatalogID active_catalog_id) const;
 
   /** Create a catalog with some sensible auto-generated catalog ID.
    * The catalog will be saved to the default catalog file.*/
@@ -124,7 +134,7 @@ class AssetCatalogService {
   Map<CatalogID, std::unique_ptr<AssetCatalog>> catalogs_;
   Map<CatalogID, std::unique_ptr<AssetCatalog>> deleted_catalogs_;
   std::unique_ptr<AssetCatalogDefinitionFile> catalog_definition_file_;
-  std::unique_ptr<AssetCatalogTree> catalog_tree_;
+  std::unique_ptr<AssetCatalogTree> catalog_tree_ = std::make_unique<AssetCatalogTree>();
   CatalogFilePath asset_library_root_;
 
   void load_directory_recursive(const CatalogFilePath &directory_path);
@@ -171,10 +181,12 @@ class AssetCatalogTreeItem {
 
   AssetCatalogTreeItem(StringRef name,
                        CatalogID catalog_id,
+                       StringRef simple_name,
                        const AssetCatalogTreeItem *parent = nullptr);
 
   CatalogID get_catalog_id() const;
-  StringRef get_name() const;
+  StringRefNull get_simple_name() const;
+  StringRefNull get_name() const;
   /** Return the full catalog path, defined as the name of this catalog prefixed by the full
    * catalog path of its parent and a separator. */
   AssetCatalogPath catalog_path() const;
@@ -191,6 +203,8 @@ class AssetCatalogTreeItem {
   /** The user visible name of this component. */
   CatalogPathComponent name_;
   CatalogID catalog_id_;
+  /** Copy of #AssetCatalog::simple_name. */
+  std::string simple_name_;
 
   /** Pointer back to the parent item. Used to reconstruct the hierarchy from an item (e.g. to
    * build a path). */
@@ -330,5 +344,21 @@ struct AssetCatalogPathCmp {
  * Set that stores catalogs ordered by (path, UUID).
  * Being a set, duplicates are removed. The catalog's simple name is ignored in this. */
 using AssetCatalogOrderedSet = std::set<const AssetCatalog *, AssetCatalogPathCmp>;
+
+/**
+ * Filter that can determine whether an asset should be visible or not, based on its catalog ID.
+ *
+ * \see AssetCatalogService::create_filter()
+ */
+class AssetCatalogFilter {
+ public:
+  bool contains(CatalogID asset_catalog_id) const;
+
+ protected:
+  friend AssetCatalogService;
+  const Set<CatalogID> matching_catalog_ids;
+
+  explicit AssetCatalogFilter(Set<CatalogID> &&matching_catalog_ids);
+};
 
 }  // namespace blender::bke
