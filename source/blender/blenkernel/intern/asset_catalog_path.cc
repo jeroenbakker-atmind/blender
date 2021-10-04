@@ -38,10 +38,6 @@ AssetCatalogPath::AssetCatalogPath(const char *path) : path_(path)
 {
 }
 
-AssetCatalogPath::AssetCatalogPath(const AssetCatalogPath &other_path) : path_(other_path.path_)
-{
-}
-
 AssetCatalogPath::AssetCatalogPath(AssetCatalogPath &&other_path) noexcept
     : path_(std::move(other_path.path_))
 {
@@ -223,7 +219,7 @@ AssetCatalogPath AssetCatalogPath::rebase(const AssetCatalogPath &from_path,
     return to_path;
   }
 
-  /* When from_path = "abcd", we need to skip "abcd/" to get the rest of the path, hence the +1. */
+  /* When from_path = "test", we need to skip "test/" to get the rest of the path, hence the +1. */
   const StringRef suffix = StringRef(this->path_).substr(from_path.length() + 1);
   const AssetCatalogPath path_suffix(suffix);
   return to_path / path_suffix;
