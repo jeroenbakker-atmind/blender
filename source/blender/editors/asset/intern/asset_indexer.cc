@@ -33,6 +33,7 @@
 #include "BLI_uuid.h"
 
 #include "BKE_appdir.h"
+#include "BKE_idtype.h"
 #include "BKE_preferences.h"
 
 #include "CLG_log.h"
@@ -44,7 +45,33 @@
 static CLG_LogRef LOG = {"ed.asset"};
 
 namespace blender::ed::asset {
+// TODO: Store `IDProperties` in index.
+/*
+ * The structure of an index file is
+ * ```
+ * {
+ *   "version": <file version number>,
+ *   "entries": [{
+ *     "name": "<asset name>",
+ *     "catalog_id": "<catalog_id>",
+ *     "catalog_name": "<catalog_name>",
+ *     "description": "<description>",
+ *     "tags": ["<tag>"]
+ *   }]
+ * }
+ * ```
+ *
+ * `entries`, `description` and `tags` are optional attributes.
+ **/
+constexpr StringRef ATTRIBUTE_VERSION = StringRef("version");
+constexpr StringRef ATTRIBUTE_ENTRIES = StringRef("entries");
+constexpr StringRef ATTRIBUTE_ENTRIES_NAME = StringRef("name");
+constexpr StringRef ATTRIBUTE_ENTRIES_CATALOG_ID = StringRef("catalog_id");
+constexpr StringRef ATTRIBUTE_ENTRIES_CATALOG_NAME = StringRef("catalog_name");
+constexpr StringRef ATTRIBUTE_ENTRIES_DESCRIPTION = StringRef("description");
+constexpr StringRef ATTRIBUTE_ENTRIES_TAGS = StringRef("tags");
 
+/** Abstract class for AssetFile and AssetIndexFile */
 class File {
  public:
   virtual const char *get_file_path() const = 0;
@@ -60,6 +87,7 @@ class File {
   }
 };
 
+/** AssetFile is the source blend file that can be indexed. */
 class AssetFile : public File {
  public:
   StringRefNull file_name;
@@ -83,24 +111,19 @@ class AssetFile : public File {
 
   const char *get_file_path() const override
   {
-
     return file_name.c_str();
   }
 };
 
-constexpr StringRef ATTRIBUTE_VERSION = StringRef("version");
-constexpr StringRef ATTRIBUTE_ENTRIES = StringRef("entries");
-constexpr StringRef ATTRIBUTE_ENTRIES_NAME = StringRef("name");
-constexpr StringRef ATTRIBUTE_ENTRIES_GROUP_NAME = StringRef("group_name");
-constexpr StringRef ATTRIBUTE_ENTRIES_IDCODE = StringRef("idcode");
-constexpr StringRef ATTRIBUTE_ENTRIES_CATALOG_ID = StringRef("catalog_id");
-constexpr StringRef ATTRIBUTE_ENTRIES_CATALOG_NAME = StringRef("catalog_name");
-constexpr StringRef ATTRIBUTE_ENTRIES_DESCRIPTION = StringRef("description");
-constexpr StringRef ATTRIBUTE_ENTRIES_TAGS = StringRef("tags");
-
+/* Helper class to parse a single entry from an AssetIndexFile. */
 struct AssetEntryReader {
  private:
   blender::io::serialize::ObjectValue::Lookup lookup;
+
+  const std::string &get_name_with_idcode() const
+  {
+    return lookup.lookup(ATTRIBUTE_ENTRIES_NAME)->as_string_value()->string_value();
+  }
 
  public:
   AssetEntryReader(const blender::io::serialize::ObjectValue &entry)
@@ -110,17 +133,19 @@ struct AssetEntryReader {
 
   const int get_idcode() const
   {
-    return lookup.lookup(ATTRIBUTE_ENTRIES_IDCODE)->as_int_value()->value();
+    const std::string &name_with_idcode = get_name_with_idcode();
+    return GS(name_with_idcode.c_str());
   }
 
-  const std::string &get_group_name() const
+  const StringRefNull get_group_name() const
   {
-    return lookup.lookup(ATTRIBUTE_ENTRIES_GROUP_NAME)->as_string_value()->string_value();
+    return BKE_idtype_idcode_to_name(get_idcode());
   }
 
-  const std::string &get_name() const
+  const StringRef get_name() const
   {
-    return lookup.lookup(ATTRIBUTE_ENTRIES_NAME)->as_string_value()->string_value();
+    StringRefNull name_with_idcode = get_name_with_idcode();
+    return name_with_idcode.substr(2);
   }
 
   const bool has_description() const
@@ -174,20 +199,14 @@ struct AssetEntryWriter {
   {
   }
 
-  void add_idcode(int idcode)
+  void add_name(int idcode, const StringRefNull name)
   {
-    attributes.append_as(
-        std::pair(ATTRIBUTE_ENTRIES_IDCODE, new blender::io::serialize::IntValue(idcode)));
-  }
-  void add_name(const StringRefNull name)
-  {
-    attributes.append_as(
-        std::pair(ATTRIBUTE_ENTRIES_NAME, new blender::io::serialize::StringValue(name)));
-  }
-  void add_group_name(const StringRefNull group_name)
-  {
-    attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_GROUP_NAME,
-                                   new blender::io::serialize::StringValue(group_name)));
+    const char *idcode_ptr = static_cast<char *>(static_cast<void *>(&idcode));
+    StringRef idcode_str = StringRef(idcode_ptr, 2);
+    std::string name_with_idcode = idcode_str + name;
+
+    attributes.append_as(std::pair(ATTRIBUTE_ENTRIES_NAME,
+                                   new blender::io::serialize::StringValue(name_with_idcode)));
   }
 
   void add_catalog_id(const bUUID &catalog_id)
@@ -227,9 +246,7 @@ static void init_value_from_file_indexer_entry(AssetEntryWriter &result,
 {
   const BLODataBlockInfo &datablock_info = indexer_entry->datablock_info;
 
-  result.add_name(datablock_info.name);
-  result.add_group_name(indexer_entry->group_name);
-  result.add_idcode(indexer_entry->idcode);
+  result.add_name(indexer_entry->idcode, datablock_info.name);
 
   const AssetMetaData &asset_data = *datablock_info.asset_data;
   result.add_catalog_id(asset_data.catalog_id);
@@ -249,14 +266,16 @@ static void init_value_from_file_indexer_entry(AssetEntryWriter &result,
 static void init_value_from_file_indexer_entries(blender::io::serialize::ObjectValue &result,
                                                  const FileIndexerEntries &indexer_entries)
 {
-
   blender::io::serialize::ArrayValue *entries = new blender::io::serialize::ArrayValue();
   blender::io::serialize::ArrayValue::Items &items = entries->elements();
 
   for (LinkNode *ln = indexer_entries.entries; ln; ln = ln->next) {
     const FileIndexerEntry *indexer_entry = static_cast<const FileIndexerEntry *>(ln->link);
-    /* TODO: We also get none asset types (Brushes/Workspaces), this seems like an implementation
-     * flaw. */
+    /* We also get none asset types (Brushes/Workspaces), when browsing using the asset browser.
+     * Reason is that the file list is constructed via `file_refresh` function,
+     * and not the expected `AssetList::setup` method.*/
+    // TODO: Should we fix this by setting the correct `filelist_setfilter_options` in
+    // `file_refresh`.
     if (indexer_entry->datablock_info.asset_data == nullptr) {
       continue;
     }
@@ -342,6 +361,13 @@ static int init_indexer_entries_from_value(FileIndexerEntries &indexer_entries,
   return num_entries_read;
 }
 
+/**
+ * Struct referencing the directory containing all indexes of a asset library.
+ *
+ * The AssetLibraryIndex instance is used to keep track of unused file indexes. During reading any
+ * used indexes are removed from the list and at the end when reading is finished the unused
+ * indexes are removed.
+ */
 struct AssetLibraryIndex {
   bUserAssetLibrary *library;
   Set<std::string> unused_file_indexes;
@@ -370,6 +396,10 @@ struct AssetLibraryIndex {
 
   std::string get_index_path() const
   {
+    /* TODO: Although `BKE_tempdir_base` is documented as persistent temp dir, but defaults on
+     * linux to `/tmp/`. It is persistent, but not after reboots. This way blender sessions are
+     * removed when rebooting on linux. Would say we want to introduce a different `BKE_tempdir_`
+     * in order to keep the indexes after a reboot. */
     std::stringstream ss;
     ss << BKE_tempdir_base() << "blender-asset-library/";
     ss << std::setfill('0') << std::setw(16) << std::hex << hash() << "_" << get_name() << "/";
@@ -378,8 +408,6 @@ struct AssetLibraryIndex {
 
   std::string index_file_path(const AssetFile &asset_file) const
   {
-    /* TODO: Although `BKE_tempdir_base` is documented as persistent temp dir, it ain't! Expected
-     * it to return `/var/tmp/` on linux. */
     std::stringstream ss;
     ss << get_index_path();
     ss << std::setfill('0') << std::setw(16) << std::hex << asset_file.hash() << "_"
@@ -387,6 +415,9 @@ struct AssetLibraryIndex {
     return ss.str();
   }
 
+  /**
+   * The AssetLibraryIndex instance is used to keep track of unused file indexes
+   */
   void init_unused_index_files()
   {
     std::string index_path = get_index_path();
@@ -657,6 +688,5 @@ constexpr FileIndexer asset_indexer()
 }  // namespace blender::ed::asset
 
 extern "C" {
-
 const FileIndexer file_indexer_asset = blender::ed::asset::asset_indexer();
 }
